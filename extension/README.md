@@ -92,7 +92,7 @@ Type commands in the chat input to control VS Code. For example:
 - `type Hello, World!`: Types the text in your editor
 - `go to line 42`: Moves the cursor to line 42
 - `search TODO`: Searches for "TODO" in the current file
-- 800+ commands supported (list available at [aircodum.app](https://www.aircodum.app) ).
+- 800+ commands supported (list available at [aircodum.com](https://www.aircodum.com) ).
 - Request new commands by raising an Issue right here.
 
 ### Capturing Screenshots
