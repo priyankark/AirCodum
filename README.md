@@ -29,8 +29,11 @@ AirCodum is your intelligent smartphone companion for Visual Studio Code! AirCod
 1.) [Extension in Open VSX](https://open-vsx.org/extension/priyankark/aircodum-app)
 2.) [VS Code Marketplace Link](https://marketplace.visualstudio.com/items?itemName=priyankark.aircodum-app)
 
-### Android App
+### Android App (free)
 Download the "AirCodum" app from the Android Play Store from [Google Play Store link](https://play.google.com/store/apps/details?id=com.codeair)
+
+### iOS App (paid)
+Download the "AirCodum" app from the App Store: [iOS App Store link](https://apps.apple.com/in/app/aircodum/id6736912465)
 
 ## Demo
 Check out this demo to understand how to use AirCodum: [AirCodum YouTube Demo](https://www.youtube.com/watch?v=DRAhUfEvJDs&t=167s)
