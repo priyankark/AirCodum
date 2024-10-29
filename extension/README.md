@@ -25,8 +25,11 @@ AirCodum is your intelligent smartphone companion for Visual Studio Code! AirCod
 4. Click "Install"
 5. Reload VS Code when prompted
 
-### Android App
-Download the "AirCodum" app from the Android Play Store from [Google Play Store link](https://play.google.com/store/apps/details?id=com.codeair&hl=en)
+### Android App (free)
+Download the "AirCodum" app from the Android Play Store: [Google Play Store link](https://play.google.com/store/apps/details?id=com.codeair&hl=en)
+
+### iOS App (paid)
+Download the "AirCodum" app from the App Store: [iOS App Store link](https://apps.apple.com/in/app/aircodum/id6736912465)
 
 ## Demo
 Check out this demo to understand how to use AirCodum: [AirCodum YouTube Demo](https://www.youtube.com/watch?v=HXtH_NYY2Lc&t=98s)
