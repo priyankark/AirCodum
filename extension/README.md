@@ -174,6 +174,10 @@ Following is not an exhaustive list:
 - For urgent requests, you may email the developer at priyankar.kumar98@gmail.com
 
 **Note:** 
-This project was earlier called "CodeAir" and is now being renamed to "AirCodum" in response to other entities owning/in-the-process-of-owning the TradeMark.
+This project was earlier called "CodeAir" and is now being renamed to "AirCodum."
+
+### As seen on:
+* [Hacker News](https://news.ycombinator.com/item?id=41749567)
+* [Product Hunt](https://www.producthunt.com/products/codeair#aircodum)
 
 Thank you for using AirCodum - happy coding!

@@ -181,3 +181,7 @@ Thank you for using AirCodum - happy coding!
 
 ### **Notice** 
 This project had a name change from "CodeAir" to "AirCodum"
+
+### As seen on:
+* [Hacker News](https://news.ycombinator.com/item?id=41749567)
+* [Product Hunt](https://www.producthunt.com/products/codeair#aircodum)
