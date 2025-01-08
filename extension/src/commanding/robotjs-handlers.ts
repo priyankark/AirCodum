@@ -25,10 +25,15 @@ interface RobotJS {
   typeString(text: string): void;
   keyTap(key: string, modifiers?: string[]): void;
   setKeyboardDelay(ms: number): void;
+  moveMouse(x: number, y: number): void;
+  mouseClick(button?: string): void;
+  mouseToggle(down: string, button?: string): void;
+  scrollMouse(x: number, y: number): void;
+  getScreenSize(): { width: number; height: number };
 }
 
 // Assert that the loaded module matches the expected interface
-const typedRobot = robot as RobotJS;
+export const typedRobot = robot as RobotJS;
 
 /**
  * Commands that involve Desktop automation not possible with VS Code APIs.
