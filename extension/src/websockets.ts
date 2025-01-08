@@ -18,9 +18,9 @@ class VSCodeVNCServer {
   private lastImageHash: string | null = null;
   private screenSize: { width: number; height: number };
   private quality = {
-    width: 800,       // More suitable for mobile screens
-    jpegQuality: 70,  // Slightly lower quality for better performance
-    fps: 10          // Lower FPS to reduce bandwidth
+    width:  1280,       // More suitable for mobile screens
+    jpegQuality: 80,  // Slightly lower quality for better performance
+    fps: 15         // Lower FPS to reduce bandwidth
   };
 
   constructor(private ws: WebSocket) {
@@ -171,19 +171,24 @@ class VSCodeVNCServer {
       }
     }
   }
-
   private async handleMouseEvent(data: any) {
     try {
-      const { x, y, eventType } = data;
+      const { x, y, eventType, screenWidth, screenHeight } = data;
       
-      // Convert coordinates from client size to actual screen size
-      const actualX = Math.floor((x / data.clientWidth) * this.screenSize.width);
-      const actualY = Math.floor((y / data.clientHeight) * this.screenSize.height);
+      // The coordinates are now already in the virtual screen resolution
+      // We just need to scale them to the actual screen size
+      const actualX = Math.floor((x / screenWidth) * this.screenSize.width);
+      const actualY = Math.floor((y / screenHeight) * this.screenSize.height);
       
-      // Move mouse
+      console.log('Mouse event:', {
+        type: eventType,
+        virtual: { x, y },
+        actual: { x: actualX, y: actualY }
+      });
+  
+      // Move mouse to calculated position
       robot.moveMouse(actualX, actualY);
       
-      // Handle different mouse events
       switch (eventType) {
         case 'down':
           robot.mouseToggle('down', 'left');
