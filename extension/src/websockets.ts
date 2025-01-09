@@ -5,7 +5,6 @@ import screenshot from 'screenshot-desktop';
 import sharp from 'sharp';
 import { handleCommand } from './commanding/command-handler';
 import { chatWithOpenAI } from './ai/api';
-import { Commands } from './commanding/commands';
 import { handleFileUpload } from './files/utils';
 import { store } from './state/store';
 import {
@@ -13,182 +12,291 @@ import {
   removeWebSocketConnection,
 } from './state/actions';
 
-class VSCodeVNCServer {
-  private streamInterval: NodeJS.Timeout | null = null;
-  private lastImageHash: string | null = null;
-  private screenSize: { width: number; height: number };
-  private quality = {
-    width:  1280,       // More suitable for mobile screens
-    jpegQuality: 80,  // Slightly lower quality for better performance
-    fps: 15         // Lower FPS to reduce bandwidth
+import { Commands } from './commanding/commands';
+
+interface VNCQualitySettings {
+  width: number;
+  jpegQuality: number;
+  fps: number;
+}
+
+/**
+ * Manages screen capture, shared by all clients.
+ * This ensures we only capture & process once for all connected clients.
+ */
+class ScreenCaptureManager {
+  private static instance: ScreenCaptureManager;
+  private isCapturing = false;
+  private captureInterval: NodeJS.Timeout | null = null;
+  private quality: VNCQualitySettings = {
+    width: 1280,
+    jpegQuality: 80,
+    fps: 15,
   };
 
-  constructor(private ws: WebSocket) {
-    // Get screen size using robotjs
-    this.screenSize = robot.getScreenSize();
-    this.setupVNCServer();
-    this.setupWebSocketHandlers();
+  // Store the current processed image in memory
+  private currentFrame: Buffer | null = null;
+  private currentFrameHash: string | null = null;
+
+  // A list of client callbacks to notify when a new frame is ready
+  private subscribers: Array<(frame: Buffer, hash: string) => void> = [];
+
+  // Use robot to get screen size
+  private screenSize = robot.getScreenSize();
+
+  private constructor() {
+    // Private to enforce singleton
   }
 
-  private async setupVNCServer() {
-    try {
-      // Start screen capture loop
-      await this.startScreenCapture();
-    } catch (error) {
-      console.error('Failed to setup VNC server:', error);
+  public static getInstance(): ScreenCaptureManager {
+    if (!ScreenCaptureManager.instance) {
+      ScreenCaptureManager.instance = new ScreenCaptureManager();
+    }
+    return ScreenCaptureManager.instance;
+  }
+
+  public subscribe(
+    callback: (frame: Buffer, hash: string) => void
+  ): () => void {
+    this.subscribers.push(callback);
+
+    // If we are not capturing yet, start capturing
+    if (!this.isCapturing) {
+      this.startCaptureLoop();
+    }
+
+    // Return an unsubscribe function
+    return () => {
+      this.subscribers = this.subscribers.filter((cb) => cb !== callback);
+      if (this.subscribers.length === 0) {
+        this.stopCaptureLoop();
+      }
+    };
+  }
+
+  public updateQualitySettings(quality: Partial<VNCQualitySettings>) {
+    if (quality.width !== undefined) {
+      this.quality.width = quality.width;
+    }
+    if (quality.jpegQuality !== undefined) {
+      this.quality.jpegQuality = quality.jpegQuality;
+    }
+    if (quality.fps !== undefined) {
+      this.quality.fps = quality.fps;
+      // Restart capture loop to apply new FPS
+      this.stopCaptureLoop();
+      this.startCaptureLoop();
     }
   }
 
-  private async startScreenCapture() {
+  private async startCaptureLoop() {
+    if (this.isCapturing) return;
+    this.isCapturing = true;
+
     let lastProcessingTime = Date.now();
-  
-  this.streamInterval = setInterval(async () => {
-    try {
-      // Skip frame if we're still processing the previous one
-      if (Date.now() - lastProcessingTime < (1000 / this.quality.fps)) {
-        return;
+    const frameDuration = 1000 / this.quality.fps;
+
+    this.captureInterval = setInterval(async () => {
+      const now = Date.now();
+      // If the last frame hasn't finished processing or we haven't
+      // waited enough to maintain the desired FPS, skip.
+      if (now - lastProcessingTime < frameDuration) return;
+      lastProcessingTime = now;
+
+      try {
+        // 1. Capture screenshot
+        const rawScreenshot = await screenshot();
+
+        // 2. Resize & encode
+        const processedImage = await this.processImage(rawScreenshot);
+
+        // 3. Compute hash
+        const hash = await this.calculateImageHash(processedImage);
+
+        // 4. If changed, update current frame and notify
+        if (hash !== this.currentFrameHash) {
+          this.currentFrame = processedImage;
+          this.currentFrameHash = hash;
+
+          // Notify all subscribers
+          this.subscribers.forEach((cb) => cb(processedImage, hash));
+        }
+      } catch (error) {
+        console.error('Error in capture loop:', error);
       }
-      
-      lastProcessingTime = Date.now();
-      const screenshotBuffer = await screenshot();
-      const processedImage = await this.processImage(screenshotBuffer);
-      const imageHash = await this.calculateImageHash(processedImage);
-      
-      if (imageHash !== this.lastImageHash) {
-        this.lastImageHash = imageHash;
-        this.ws.send(JSON.stringify({
-          type: 'screen-update',
-          image: processedImage.toString('base64'),
-          dimensions: {
-            width: this.quality.width,
-            height: Math.floor(this.quality.width * (this.screenSize.height / this.screenSize.width))
-          }
-        }));
-      }
-    } catch (error) {
-      console.error('Error capturing screen:', error);
-    }
-  }, Math.floor(1000 / this.quality.fps));
+    }, frameDuration);
   }
 
-  private async processImage(imageBuffer: Buffer): Promise<Buffer> {
-    // Calculate height maintaining aspect ratio
-    const height = Math.floor(this.quality.width * (this.screenSize.height / this.screenSize.width));
-    
-    return await sharp(imageBuffer)
+  private stopCaptureLoop() {
+    if (this.captureInterval) {
+      clearInterval(this.captureInterval);
+      this.captureInterval = null;
+    }
+    this.isCapturing = false;
+  }
+
+  private async processImage(buffer: Buffer): Promise<Buffer> {
+    const height = Math.floor(
+      this.quality.width * (this.screenSize.height / this.screenSize.width)
+    );
+
+    // You could switch to a GPU-accelerated library or worker threads here
+    return sharp(buffer)
       .resize(this.quality.width, height, {
         fit: 'fill',
-        kernel: sharp.kernel.nearest // Faster resizing
+        kernel: sharp.kernel.nearest,
       })
       .jpeg({
         quality: this.quality.jpegQuality,
         force: true,
         optimizeScans: true,
-        progressive: true
+        progressive: true,
       })
       .toBuffer();
   }
 
   private async calculateImageHash(imageBuffer: Buffer): Promise<string> {
-    // More efficient hashing using a smaller thumbnail
-    return await sharp(imageBuffer)
-      .resize(16, 16) // Smaller thumbnail for faster hashing
+    // Example: create a tiny grayscale version for hashing
+    const tinyBuffer = await sharp(imageBuffer)
+      .resize(16, 16)
       .greyscale()
       .raw()
-      .toBuffer()
-      .then(buf => {
-        // Only hash a subset of pixels for better performance
-        const pixels = Array.from(buf).filter((_, i) => i % 4 === 0);
-        return pixels.join(',');
-      });
+      .toBuffer();
+
+    // Hash only a subset of the pixels (every 4th) to speed things up
+    const pixels = Array.from(tinyBuffer).filter((_, i) => i % 4 === 0);
+    return pixels.join(',');
   }
-  
+}
+
+/**
+ * Per-connection class that handles the WebSocket for:
+ * - Sending frames as they arrive
+ * - Handling user input
+ * - Handling commands
+ */
+class VSCodeVNCConnection {
+  private unsubscribe: (() => void) | null = null;
+  private screenSize = robot.getScreenSize();
+
+  constructor(private ws: WebSocket) {
+    this.setupWebSocketHandlers();
+    this.subscribeToFrameUpdates();
+  }
 
   private setupWebSocketHandlers() {
     this.ws.on('message', async (message: WebSocket.Data) => {
+      // If we receive binary data, parse it as file upload or another protocol
       if (message instanceof Buffer) {
-        const messageData = message.toString();
-        
-        try {
-          const parsedMessage = JSON.parse(messageData);
-          
-          switch (parsedMessage.type) {
-            case 'mouse-event':
-              await this.handleMouseEvent(parsedMessage);
-              break;
-            case 'keyboard-event':
-              await this.handleKeyboardEvent(parsedMessage);
-              break;
-            case 'quality-update':
-              this.updateQualitySettings(parsedMessage);
-              break;
-            default:
-              // Handle existing message types
-              if (this.isSupportedCommand(messageData)) {
-                await handleCommand(messageData as never, this.ws);
-              } else {
-                await handleFileUpload(message, this.ws);
-              }
-          }
-        } catch (error) {
-          // If not JSON, handle as before
+        await this.handleBufferMessage(message);
+      } else if (typeof message === 'string') {
+        await this.handleStringMessage(message);
+      }
+    });
+
+    this.ws.on('close', () => {
+      this.dispose();
+    });
+  }
+
+  private async handleBufferMessage(message: Buffer) {
+    const messageData = message.toString();
+    try {
+      const parsedMessage = JSON.parse(messageData);
+      switch (parsedMessage.type) {
+        case 'mouse-event':
+          await this.handleMouseEvent(parsedMessage);
+          break;
+        case 'keyboard-event':
+          await this.handleKeyboardEvent(parsedMessage);
+          break;
+        case 'quality-update':
+          ScreenCaptureManager.getInstance().updateQualitySettings(parsedMessage);
+          break;
+        default:
           if (this.isSupportedCommand(messageData)) {
             await handleCommand(messageData as never, this.ws);
           } else {
             await handleFileUpload(message, this.ws);
           }
-        }
-      } else if (typeof message === 'string') {
-        try {
-          const response = await chatWithOpenAI(
-            message,
-            store.getState().apiKey || ''
-          );
-          store.getState().webview.panel?.webview.postMessage({
-            type: 'chatResponse',
-            response,
-          });
-        } catch (error: any) {
-          store.getState().webview.panel?.webview.postMessage({
-            type: 'error',
-            message: 'Error chatting with AI',
-          });
-        }
       }
-    });
-  }
-
-  private updateQualitySettings(data: any) {
-    // Update quality settings based on client request
-    if (data.width) this.quality.width = data.width;
-    if (data.jpegQuality) this.quality.jpegQuality = data.jpegQuality;
-    if (data.fps) {
-      this.quality.fps = data.fps;
-      // Restart screen capture with new FPS
-      if (this.streamInterval) {
-        clearInterval(this.streamInterval);
-        this.startScreenCapture();
+    } catch (error) {
+      // If not JSON or parse error, treat as command or file
+      if (this.isSupportedCommand(messageData)) {
+        await handleCommand(messageData as never, this.ws);
+      } else {
+        await handleFileUpload(message, this.ws);
       }
     }
   }
+
+  private async handleStringMessage(message: string) {
+    try {
+      // If it's JSON, check if it matches our known message types
+      const parsedMessage = JSON.parse(message);
+      if (parsedMessage.type === 'quality-update') {
+        ScreenCaptureManager.getInstance().updateQualitySettings(parsedMessage);
+        return;
+      }
+      // If not recognized JSON, treat it as text for AI chat
+      throw new Error('Not recognized JSON');
+    } catch {
+      // Chat with OpenAI fallback
+      try {
+        const response = await chatWithOpenAI(
+          message,
+          store.getState().apiKey || ''
+        );
+        store.getState().webview.panel?.webview.postMessage({
+          type: 'chatResponse',
+          response,
+        });
+      } catch (error: any) {
+        store.getState().webview.panel?.webview.postMessage({
+          type: 'error',
+          message: 'Error chatting with AI',
+        });
+      }
+    }
+  }
+
+  private subscribeToFrameUpdates() {
+    const manager = ScreenCaptureManager.getInstance();
+    // Subscribe to new frames
+    this.unsubscribe = manager.subscribe((frame, hash) => {
+      // You can send a binary message directly:
+      // this.ws.send(frame, { binary: true });
+      //
+      // Or send JSON with base64 for compatibility:
+      const base64Image = frame.toString('base64');
+      this.ws.send(
+        JSON.stringify({
+          type: 'screen-update',
+          image: base64Image,
+          dimensions: this.getScaledDimensions(),
+        })
+      );
+    });
+  }
+
+  private getScaledDimensions() {
+    const { width } = ScreenCaptureManager.getInstance()['quality'];
+    const { width: realWidth, height: realHeight } = this.screenSize;
+    const height = Math.floor(width * (realHeight / realWidth));
+
+    return { width, height };
+  }
+
   private async handleMouseEvent(data: any) {
     try {
       const { x, y, eventType, screenWidth, screenHeight } = data;
-      
-      // The coordinates are now already in the virtual screen resolution
-      // We just need to scale them to the actual screen size
+
+      // Convert from client space to actual screen coordinates
       const actualX = Math.floor((x / screenWidth) * this.screenSize.width);
       const actualY = Math.floor((y / screenHeight) * this.screenSize.height);
-      
-      console.log('Mouse event:', {
-        type: eventType,
-        virtual: { x, y },
-        actual: { x: actualX, y: actualY }
-      });
-  
-      // Move mouse to calculated position
+
       robot.moveMouse(actualX, actualY);
-      
+
       switch (eventType) {
         case 'down':
           robot.mouseToggle('down', 'left');
@@ -197,7 +305,7 @@ class VSCodeVNCServer {
           robot.mouseToggle('up', 'left');
           break;
         case 'move':
-          // Just move the mouse, already handled above
+          // Already moved above
           break;
       }
     } catch (error) {
@@ -230,20 +338,24 @@ class VSCodeVNCServer {
   }
 
   public dispose() {
-    if (this.streamInterval) {
-      clearInterval(this.streamInterval);
+    // Unsubscribe from frame updates
+    if (this.unsubscribe) {
+      this.unsubscribe();
+      this.unsubscribe = null;
     }
   }
 }
 
+// Entry point for new WebSocket connections
 export function handleWebSocketConnection(ws: WebSocket) {
   console.log('New WebSocket connection');
   addWebSocketConnection(ws);
-  
-  const vncServer = new VSCodeVNCServer(ws);
+
+  // Create a connection instance for this socket
+  const vncConnection = new VSCodeVNCConnection(ws);
 
   ws.on('close', () => {
-    vncServer.dispose();
+    vncConnection.dispose();
     removeWebSocketConnection(ws);
   });
 }
