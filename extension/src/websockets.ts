@@ -34,19 +34,16 @@ class ScreenCaptureManager {
     fps: 15,
   };
 
-  // Store the current processed image in memory
-  private currentFrame: Buffer | null = null;
-  private currentFrameHash: string | null = null;
+  // We'll store just one pending screenshot at a time.
+  private pendingRawScreenshot: Buffer | null = null;
 
-  // A list of client callbacks to notify when a new frame is ready
+  // True if we're currently processing a frame
+  private processingFrame = false;
+
   private subscribers: Array<(frame: Buffer, hash: string) => void> = [];
-
-  // Use robot to get screen size
   private screenSize = robot.getScreenSize();
 
-  private constructor() {
-    // Private to enforce singleton
-  }
+  private constructor() {}
 
   public static getInstance(): ScreenCaptureManager {
     if (!ScreenCaptureManager.instance) {
@@ -60,12 +57,11 @@ class ScreenCaptureManager {
   ): () => void {
     this.subscribers.push(callback);
 
-    // If we are not capturing yet, start capturing
+    // If no one is capturing, start
     if (!this.isCapturing) {
       this.startCaptureLoop();
     }
 
-    // Return an unsubscribe function
     return () => {
       this.subscribers = this.subscribers.filter((cb) => cb !== callback);
       if (this.subscribers.length === 0) {
@@ -74,55 +70,25 @@ class ScreenCaptureManager {
     };
   }
 
-  public updateQualitySettings(quality: Partial<VNCQualitySettings>) {
-    if (quality.width !== undefined) {
-      this.quality.width = quality.width;
-    }
-    if (quality.jpegQuality !== undefined) {
-      this.quality.jpegQuality = quality.jpegQuality;
-    }
-    if (quality.fps !== undefined) {
-      this.quality.fps = quality.fps;
-      // Restart capture loop to apply new FPS
-      this.stopCaptureLoop();
-      this.startCaptureLoop();
-    }
-  }
-
-  private async startCaptureLoop() {
+  private startCaptureLoop() {
     if (this.isCapturing) return;
     this.isCapturing = true;
 
-    let lastProcessingTime = Date.now();
     const frameDuration = 1000 / this.quality.fps;
 
+    // We capture periodically, but process in a separate function
     this.captureInterval = setInterval(async () => {
-      const now = Date.now();
-      // If the last frame hasn't finished processing or we haven't
-      // waited enough to maintain the desired FPS, skip.
-      if (now - lastProcessingTime < frameDuration) return;
-      lastProcessingTime = now;
-
       try {
-        // 1. Capture screenshot
-        const rawScreenshot = await screenshot();
+        // Capture raw screenshot
+        const raw = await screenshot();
+        // If we are still processing, discard the old pending
+        // and store this new screenshot as the pending one.
+        this.pendingRawScreenshot = raw;
 
-        // 2. Resize & encode
-        const processedImage = await this.processImage(rawScreenshot);
-
-        // 3. Compute hash
-        const hash = await this.calculateImageHash(processedImage);
-
-        // 4. If changed, update current frame and notify
-        if (hash !== this.currentFrameHash) {
-          this.currentFrame = processedImage;
-          this.currentFrameHash = hash;
-
-          // Notify all subscribers
-          this.subscribers.forEach((cb) => cb(processedImage, hash));
-        }
+        // Attempt to process if not already busy
+        this.processNextFrameIfAvailable();
       } catch (error) {
-        console.error('Error in capture loop:', error);
+        console.error('Capture error:', error);
       }
     }, frameDuration);
   }
@@ -135,12 +101,49 @@ class ScreenCaptureManager {
     this.isCapturing = false;
   }
 
+  private async processNextFrameIfAvailable() {
+    // If we're already processing, return. We'll handle it later when done.
+    if (this.processingFrame) return;
+
+    // If there’s no pending screenshot, nothing to do
+    if (!this.pendingRawScreenshot) return;
+
+    // Mark that we’re processing
+    this.processingFrame = true;
+
+    // Grab the pending screenshot and clear it so that
+    // if a new one arrives, it won't overwrite mid-process.
+    const rawScreenshot = this.pendingRawScreenshot;
+    this.pendingRawScreenshot = null;
+
+    try {
+      // 1. Process the image
+      const processedImage = await this.processImage(rawScreenshot);
+
+      // 2. Compute hash
+      const hash = await this.calculateImageHash(processedImage);
+
+      // 3. Notify subscribers
+      this.subscribers.forEach((cb) => cb(processedImage, hash));
+    } catch (error) {
+      console.error('Error processing frame:', error);
+    }
+
+    // Mark done
+    this.processingFrame = false;
+
+    // Check if another screenshot arrived while we were busy
+    // so we can process the *latest* one immediately.
+    if (this.pendingRawScreenshot) {
+      // If so, process that now
+      this.processNextFrameIfAvailable();
+    }
+  }
+
   private async processImage(buffer: Buffer): Promise<Buffer> {
     const height = Math.floor(
       this.quality.width * (this.screenSize.height / this.screenSize.width)
     );
-
-    // You could switch to a GPU-accelerated library or worker threads here
     return sharp(buffer)
       .resize(this.quality.width, height, {
         fit: 'fill',
@@ -156,18 +159,33 @@ class ScreenCaptureManager {
   }
 
   private async calculateImageHash(imageBuffer: Buffer): Promise<string> {
-    // Example: create a tiny grayscale version for hashing
-    const tinyBuffer = await sharp(imageBuffer)
+    const tiny = await sharp(imageBuffer)
       .resize(16, 16)
       .greyscale()
       .raw()
       .toBuffer();
 
-    // Hash only a subset of the pixels (every 4th) to speed things up
-    const pixels = Array.from(tinyBuffer).filter((_, i) => i % 4 === 0);
+    const pixels = Array.from(tiny).filter((_, i) => i % 4 === 0);
     return pixels.join(',');
   }
+
+  public updateQualitySettings(quality: Partial<VNCQualitySettings>) {
+    if (quality.width !== undefined) {
+      this.quality.width = quality.width;
+    }
+    if (quality.jpegQuality !== undefined) {
+      this.quality.jpegQuality = quality.jpegQuality;
+    }
+    if (quality.fps !== undefined) {
+      this.quality.fps = quality.fps;
+      if (this.captureInterval) {
+        clearInterval(this.captureInterval);
+        this.startCaptureLoop();
+      }
+    }
+  }
 }
+
 
 /**
  * Per-connection class that handles the WebSocket for:

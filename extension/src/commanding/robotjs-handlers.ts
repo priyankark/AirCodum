@@ -60,6 +60,7 @@ export const RobotJSCommandHandlers: Record<
   down: () => typedRobot.keyTap("down"),
   left: () => typedRobot.keyTap("left"),
   right: () => typedRobot.keyTap("right"),
+  shift: () => typedRobot.keyTap("shift"),
   search: (query: string) => {
     // Open the search panel
     if (process.platform === "darwin") {
