@@ -1,5 +1,5 @@
 import * as os from "os";
-import { Jimp, JimpMime } from "jimp";
+import { resizeImage as jimpResizeImage } from "./jimp";
 
 export function getIPAddress(): string {
   const interfaces = os.networkInterfaces();
@@ -21,9 +21,7 @@ export async function resizeImage(
   width: number
 ): Promise<Buffer> {
   try {
-    const image = await Jimp.read(filePath);
-    await image.resize({ w: width });
-    return await image.getBuffer(JimpMime.png);
+    return await jimpResizeImage(filePath, width);
   } catch (error) {
     console.error("Error resizing image:", error);
     throw error;

@@ -6,9 +6,10 @@ const production = process.argv.includes('--production');
 const watch = process.argv.includes('--watch');
 
 async function copyNativeAddons() {
-  const platforms = ['darwin-x64+arm64', 'linux-x64', 'win32-ia32'];
+  // RobotJS copying (unchanged)
+  const platforms = ['darwin-x64+arm64', 'linux-x64', 'win32-ia32', 'win32-x64'];
   const sourceDir = path.join(__dirname, 'node_modules/@hurdlegroup/robotjs/prebuilds');
-  
+
   for (const platform of platforms) {
     const targetDir = path.join(__dirname, 'dist', platform);
     try {
@@ -23,25 +24,6 @@ async function copyNativeAddons() {
     }
   }
 }
-
-/**
- * @type {import('esbuild').Plugin}
- */
-const esbuildProblemMatcherPlugin = {
-  name: 'esbuild-problem-matcher',
-  setup(build) {
-    build.onStart(() => {
-      console.log('[watch] build started');
-    });
-    build.onEnd(result => {
-      result.errors.forEach(({ text, location }) => {
-        console.error(`✘ [ERROR] ${text}`);
-        console.error(`    ${location.file}:${location.line}:${location.column}:`);
-      });
-      console.log('[watch] build finished');
-    });
-  }
-};
 
 /**
  * @type {import('esbuild').Plugin}
@@ -79,6 +61,25 @@ async function main() {
     await ctx.dispose();
   }
 }
+
+/**
+ * @type {import('esbuild').Plugin}
+ */
+const esbuildProblemMatcherPlugin = {
+  name: 'esbuild-problem-matcher',
+  setup(build) {
+    build.onStart(() => {
+      console.log('[watch] build started');
+    });
+    build.onEnd(result => {
+      result.errors.forEach(({ text, location }) => {
+        console.error(`✘ [ERROR] ${text}`);
+        console.error(`    ${location.file}:${location.line}:${location.column}:`);
+      });
+      console.log('[watch] build finished');
+    });
+  }
+};
 
 main().catch(e => {
   console.error(e);

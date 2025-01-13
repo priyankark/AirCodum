@@ -1,5 +1,6 @@
 import * as path from "path";
 import * as vscode from "vscode";
+import os from "os";
 
 // Dynamically load the correct native module based on the platform
 let robotjsPath: string;
@@ -12,7 +13,19 @@ if (process.platform === "darwin") {
 } else if (process.platform === "linux") {
   robotjsPath = path.join(__dirname, "linux-x64", "@hurdlegroup+robotjs.node");
 } else if (process.platform === "win32") {
-  robotjsPath = path.join(__dirname, "win32-ia32", "@hurdlegroup+robotjs.node");
+  if (os.arch() === "x64") {
+    robotjsPath = path.join(
+      __dirname,
+      "win32-x64",
+      "@hurdlegroup+robotjs.node"
+    );
+  } else {
+    robotjsPath = path.join(
+      __dirname,
+      "win32-ia32",
+      "@hurdlegroup+robotjs.node"
+    );
+  }
 } else {
   throw new Error("Unsupported platform");
 }
