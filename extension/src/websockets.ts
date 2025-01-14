@@ -57,7 +57,7 @@ class ScreenCaptureManager {
   private framesSent = 0;
 
   // Quality control
-  private readonly MIN_QUALITY = 70;
+  private readonly MIN_QUALITY = 80;
   private readonly MAX_QUALITY = 90;
   private readonly MIN_WIDTH = 1024;
   private readonly MAX_WIDTH = 1920;
