@@ -32,25 +32,49 @@ class ScreenCaptureManager {
   private captureInterval: NodeJS.Timeout | null = null;
   private quality: VNCQualitySettings = {
     width: 1280,
-    jpegQuality: 80, // Reduced for better performance
+    jpegQuality: 80,
     fps: 10,
   };
 
   private currentFrame: Buffer | null = null;
   private processingFrame = false;
   private lastFrameHash: string | null = null;
-  
-  // Performance tracking
+  private pendingFrame: Buffer | null = null;
+  private lastFrameSentTime = 0;
+  private readonly MIN_FRAME_INTERVAL = 50;
+  private coalesceTimer: NodeJS.Timeout | null = null;
+
   private frameProcessingTimes: number[] = [];
   private lastPerformanceAdjustment = Date.now();
-  
-  private subscribers: Array<(frame: Buffer, dimensions: { width: number; height: number }) => void> = [];
+  private droppedFrames = 0;
+  private framesSent = 0;
+  private lastFrameSize = 0;
+
+  private subscribers: Array<
+    (frame: Buffer, dimensions: { width: number; height: number }) => void
+  > = [];
   private screenSize = robot.getScreenSize();
   private cachedDimensions = this.getScaledDimensions();
+  private previousImageData: Buffer | null = null;
 
   private constructor() {
-    // Pre-calculate dimensions
     this.cachedDimensions = this.getScaledDimensions();
+
+    setInterval(() => {
+      if (this.isCapturing) {
+        const dropRate =
+          (this.droppedFrames / (this.droppedFrames + this.framesSent)) * 100;
+        const avgFrameSize = this.lastFrameSize / 1024;
+        console.debug(
+          `Performance stats - Sent: ${this.framesSent}, Dropped: ${this.droppedFrames}, ` +
+            `Drop rate: ${dropRate.toFixed(
+              1
+            )}%, Avg frame size: ${avgFrameSize.toFixed(1)}KB`
+        );
+        this.droppedFrames = 0;
+        this.framesSent = 0;
+      }
+    }, 5000);
   }
 
   public static getInstance(): ScreenCaptureManager {
@@ -61,7 +85,10 @@ class ScreenCaptureManager {
   }
 
   public subscribe(
-    callback: (frame: Buffer, dimensions: { width: number; height: number }) => void
+    callback: (
+      frame: Buffer,
+      dimensions: { width: number; height: number }
+    ) => void
   ): () => void {
     this.subscribers.push(callback);
     if (!this.isCapturing) {
@@ -86,55 +113,99 @@ class ScreenCaptureManager {
       const now = performance.now();
       const elapsed = now - lastFrameTime;
 
-      // Adaptive frame skipping based on performance
-      if (elapsed < frameDuration || this.processingFrame) {
+      if (elapsed < frameDuration * 0.8 || this.processingFrame) {
+        this.droppedFrames++;
         return;
       }
 
       lastFrameTime = now;
-      
+
       try {
         const raw = await screenshot();
-        this.currentFrame = raw;
-        await this.processNextFrameIfAvailable();
+        this.handleNewFrame(raw);
       } catch (error) {
         console.error("Capture error:", error);
       }
-    }, Math.max(1000 / 60, frameDuration)); // Cap at 60fps
+    }, Math.max(1000 / 60, frameDuration));
   }
 
-  private async processNextFrameIfAvailable() {
-    if (!this.currentFrame || this.processingFrame) return;
+  private calculateQuickHash(buffer: Buffer): string {
+    const samples = new Uint8Array(16);
+    const step = Math.floor(buffer.length / 16);
+    const offset = Math.floor(step / 2);
 
-    const startTime = performance.now();
+    for (let i = 0; i < 16; i++) {
+      samples[i] = buffer[offset + i * step];
+    }
+
+    return crypto.createHash("md5").update(samples).digest("hex");
+  }
+
+  private handleNewFrame(frame: Buffer) {
+    const quickHash = this.calculateQuickHash(frame);
+    if (quickHash === this.lastFrameHash) {
+      this.droppedFrames++;
+      return;
+    }
+
+    const now = performance.now();
+    const timeSinceLastFrame = now - this.lastFrameSentTime;
+
+    if (
+      this.processingFrame ||
+      timeSinceLastFrame < this.MIN_FRAME_INTERVAL * 0.8
+    ) {
+      this.droppedFrames++;
+      return;
+    }
+
+    this.lastFrameHash = quickHash;
+    this.pendingFrame = frame;
+
+    if (timeSinceLastFrame >= this.MIN_FRAME_INTERVAL) {
+      this.processPendingFrame();
+    } else if (!this.coalesceTimer) {
+      this.coalesceTimer = setTimeout(() => {
+        this.processPendingFrame();
+        this.coalesceTimer = null;
+      }, this.MIN_FRAME_INTERVAL - timeSinceLastFrame);
+    }
+  }
+
+  private async processPendingFrame() {
+    if (!this.pendingFrame || this.processingFrame) return;
+
+    const now = performance.now();
+    if (now - this.lastFrameSentTime < this.MIN_FRAME_INTERVAL) {
+      this.droppedFrames++;
+      return;
+    }
+
     this.processingFrame = true;
-    const frame = this.currentFrame;
+    const frame = this.pendingFrame;
+    this.pendingFrame = null;
 
     try {
-      // Quick hash check using sampling
-      const quickHash = this.calculateQuickHash(frame);
-      if (quickHash === this.lastFrameHash) {
-        this.processingFrame = false;
-        return;
-      }
-      this.lastFrameHash = quickHash;
-
+      const startTime = performance.now();
       const processedFrame = await this.processFrame(frame);
-      
-      // Track processing time
+
       const processingTime = performance.now() - startTime;
       this.frameProcessingTimes.push(processingTime);
-      
-      // Keep only last 30 samples
+
       if (this.frameProcessingTimes.length > 30) {
         this.frameProcessingTimes.shift();
       }
 
-      // Adjust quality settings if needed
       this.adjustQualityIfNeeded();
 
-      // Notify subscribers
-      this.subscribers.forEach(cb => cb(processedFrame, this.cachedDimensions));
+      this.framesSent++;
+      this.lastFrameSentTime = now;
+      this.lastFrameSize = processedFrame.length;
+      this.subscribers.forEach((cb) =>
+        cb(processedFrame, this.cachedDimensions)
+      );
+
+      this.previousImageData = processedFrame;
     } catch (error) {
       console.error("Processing error:", error);
     } finally {
@@ -142,35 +213,34 @@ class ScreenCaptureManager {
     }
   }
 
-  private calculateQuickHash(buffer: Buffer): string {
-    // Fast sampling - take bytes at regular intervals
-    const samples = new Uint8Array(32);
-    const step = Math.floor(buffer.length / 32);
-    for (let i = 0; i < 32; i++) {
-      samples[i] = buffer[i * step];
-    }
-    return crypto.createHash('md5').update(samples).digest('hex');
-  }
-
   private async processFrame(frame: Buffer): Promise<Buffer> {
     try {
       const image = await jimp.createImage(frame);
-      
-      // Use NEAREST for faster resizing when processing is slow
-      const resizeMode = this.isProcessingSlow() ? 
-        ResizeStrategy.NEAREST_NEIGHBOR : 
-        ResizeStrategy.BILINEAR;
 
-      image.resize({
-        w: this.cachedDimensions.width,
-        h: this.cachedDimensions.height,
-        mode: resizeMode
-      });
+      if (
+        image.width !== this.cachedDimensions.width ||
+        image.height !== this.cachedDimensions.height
+      ) {
+        const resizeMode = this.isProcessingSlow()
+          ? ResizeStrategy.NEAREST_NEIGHBOR
+          : ResizeStrategy.BILINEAR;
+
+        image.resize({
+          w: this.cachedDimensions.width,
+          h: this.cachedDimensions.height,
+          mode: resizeMode,
+        });
+      }
+
+      const quality = this.detectHighMotion()
+        ? Math.min(this.quality.jpegQuality, 70)
+        : this.quality.jpegQuality;
 
       return image.getBuffer("image/jpeg", {
-        quality: this.quality.jpegQuality,
-        progressive: false, // Faster encoding
-        chromaSubsampling: true // Better compression
+        quality,
+        progressive: false,
+        chromaSubsampling: true,
+        fastEntropy: true,
       });
     } catch (error) {
       console.error("Error in processFrame:", error);
@@ -178,31 +248,40 @@ class ScreenCaptureManager {
     }
   }
 
+  private detectHighMotion(): boolean {
+    if (this.frameProcessingTimes.length < 5) return false;
+    const recentTimes = this.frameProcessingTimes.slice(-5);
+    const avgTime = recentTimes.reduce((a, b) => a + b, 0) / recentTimes.length;
+    return avgTime > (1000 / this.quality.fps) * 0.7;
+  }
+
   private isProcessingSlow(): boolean {
     if (this.frameProcessingTimes.length < 10) return false;
-    const avgProcessingTime = this.frameProcessingTimes.reduce((a, b) => a + b, 0) / this.frameProcessingTimes.length;
+    const avgProcessingTime =
+      this.frameProcessingTimes.reduce((a, b) => a + b, 0) /
+      this.frameProcessingTimes.length;
     return avgProcessingTime > (1000 / this.quality.fps) * 0.8;
   }
 
   private adjustQualityIfNeeded() {
     const now = Date.now();
-    if (now - this.lastPerformanceAdjustment < 5000) return; // Only adjust every 5 seconds
-    
-    if (this.isProcessingSlow()) {
-      // Reduce quality gradually
-      this.quality.jpegQuality = Math.max(70, this.quality.jpegQuality - 5);
-      this.quality.width = Math.max(800, this.quality.width - 64);
+    if (now - this.lastPerformanceAdjustment < 2000) return;
+
+    const recentTimes = this.frameProcessingTimes.slice(-10);
+    const avgProcessingTime =
+      recentTimes.reduce((a, b) => a + b, 0) / recentTimes.length;
+    const targetFrameTime = 1000 / this.quality.fps;
+
+    if (avgProcessingTime > targetFrameTime * 0.8) {
+      this.quality.jpegQuality = Math.max(65, this.quality.jpegQuality - 8);
+      this.quality.width = Math.max(800, this.quality.width - 128);
       this.cachedDimensions = this.getScaledDimensions();
-    } else if (this.frameProcessingTimes.length >= 30) {
-      // If performing well, gradually improve quality
-      const avgProcessingTime = this.frameProcessingTimes.reduce((a, b) => a + b, 0) / this.frameProcessingTimes.length;
-      if (avgProcessingTime < (1000 / this.quality.fps) * 0.5) {
-        this.quality.jpegQuality = Math.min(70, this.quality.jpegQuality + 2);
-        this.quality.width = Math.min(1920, this.quality.width + 32);
-        this.cachedDimensions = this.getScaledDimensions();
-      }
+    } else if (avgProcessingTime < targetFrameTime * 0.4) {
+      this.quality.jpegQuality = Math.min(85, this.quality.jpegQuality + 1);
+      this.quality.width = Math.min(1920, this.quality.width + 16);
+      this.cachedDimensions = this.getScaledDimensions();
     }
-    
+
     this.lastPerformanceAdjustment = now;
   }
 
@@ -215,13 +294,16 @@ class ScreenCaptureManager {
 
   public updateQualitySettings(quality: Partial<VNCQualitySettings>) {
     let changed = false;
-    
+
     if (quality.width !== undefined && quality.width !== this.quality.width) {
       this.quality.width = quality.width;
       this.cachedDimensions = this.getScaledDimensions();
       changed = true;
     }
-    if (quality.jpegQuality !== undefined && quality.jpegQuality !== this.quality.jpegQuality) {
+    if (
+      quality.jpegQuality !== undefined &&
+      quality.jpegQuality !== this.quality.jpegQuality
+    ) {
       this.quality.jpegQuality = quality.jpegQuality;
       changed = true;
     }
@@ -244,6 +326,7 @@ class ScreenCaptureManager {
     this.currentFrame = null;
     this.lastFrameHash = null;
     this.frameProcessingTimes = [];
+    this.previousImageData = null;
   }
 
   private restartCaptureLoop() {
@@ -251,7 +334,6 @@ class ScreenCaptureManager {
     this.startCaptureLoop();
   }
 }
-
 
 /**
  * Per-connection class that handles the WebSocket for:
@@ -294,7 +376,9 @@ class VSCodeVNCConnection {
           await this.handleKeyboardEvent(parsedMessage);
           break;
         case "quality-update":
-          ScreenCaptureManager.getInstance().updateQualitySettings(parsedMessage);
+          ScreenCaptureManager.getInstance().updateQualitySettings(
+            parsedMessage
+          );
           break;
         default:
           if (this.isSupportedCommand(messageData)) {
