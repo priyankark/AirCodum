@@ -39,7 +39,7 @@ export async function handleCommand(
   }
 
   if (command.toLowerCase().startsWith("keytap ")) {
-    const key = command.slice(7) as keyof typeof RobotJSCommandHandlers;
+    const key = command.slice(7).trim() as keyof typeof RobotJSCommandHandlers;
     if (RobotJSCommandHandlers[key]) {
       RobotJSCommandHandlers[key]();
     } else {

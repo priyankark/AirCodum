@@ -17,7 +17,7 @@ export async function takeAndSendScreenshot(ws: WebSocket) {
       screenshotBuffer = scnsht;
     }
 
-    const fileInfo = await saveFile(scnsht);
+    const fileInfo = await saveFile(screenshotBuffer);
     console.log("fileInfo", fileInfo);
 
     const resizedImageBuffer = await resizeImage(fileInfo.filePath, 800);

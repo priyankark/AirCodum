@@ -5,6 +5,7 @@
 **/.eslintrc.json
 **/*.map
 **/*.ts
+!dist/**/*.d.ts
 **/tsconfig.json
 icon/res/
 node_modules
@@ -15,4 +16,4 @@ out/
 webpack.config.js
 esbuild.js
 AirCodum
-
+!vendor/**/*

@@ -1,5 +1,6 @@
 import * as path from "path";
 import * as vscode from "vscode";
+import os from "os";
 
 // Dynamically load the correct native module based on the platform
 let robotjsPath: string;
@@ -12,7 +13,19 @@ if (process.platform === "darwin") {
 } else if (process.platform === "linux") {
   robotjsPath = path.join(__dirname, "linux-x64", "@hurdlegroup+robotjs.node");
 } else if (process.platform === "win32") {
-  robotjsPath = path.join(__dirname, "win32-ia32", "@hurdlegroup+robotjs.node");
+  if (os.arch() === "x64") {
+    robotjsPath = path.join(
+      __dirname,
+      "win32-x64",
+      "@hurdlegroup+robotjs.node"
+    );
+  } else {
+    robotjsPath = path.join(
+      __dirname,
+      "win32-ia32",
+      "@hurdlegroup+robotjs.node"
+    );
+  }
 } else {
   throw new Error("Unsupported platform");
 }
@@ -25,10 +38,15 @@ interface RobotJS {
   typeString(text: string): void;
   keyTap(key: string, modifiers?: string[]): void;
   setKeyboardDelay(ms: number): void;
+  moveMouse(x: number, y: number): void;
+  mouseClick(button?: string): void;
+  mouseToggle(down: string, button?: string): void;
+  scrollMouse(x: number, y: number): void;
+  getScreenSize(): { width: number; height: number };
 }
 
 // Assert that the loaded module matches the expected interface
-const typedRobot = robot as RobotJS;
+export const typedRobot = robot as RobotJS;
 
 /**
  * Commands that involve Desktop automation not possible with VS Code APIs.
@@ -55,6 +73,7 @@ export const RobotJSCommandHandlers: Record<
   down: () => typedRobot.keyTap("down"),
   left: () => typedRobot.keyTap("left"),
   right: () => typedRobot.keyTap("right"),
+  shift: () => typedRobot.keyTap("shift"),
   search: (query: string) => {
     // Open the search panel
     if (process.platform === "darwin") {
