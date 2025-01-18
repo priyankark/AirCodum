@@ -33,9 +33,9 @@ class ScreenCaptureManager {
 
   // Base configuration with better defaults
   private quality: VNCQualitySettings = {
-    width: 1440,        // Default width for good quality
-    jpegQuality: 85,    // Start with good quality
-    fps: 30,           // Target FPS
+    width: 1440, // Default width for good quality
+    jpegQuality: 85, // Start with good quality
+    fps: 30, // Target FPS
   };
 
   // Frame management
@@ -48,7 +48,7 @@ class ScreenCaptureManager {
   private pendingFrames: Buffer[] = [];
   private coalesceTimer: NodeJS.Timeout | null = null;
   private readonly COALESCE_MAX_WAIT = 100; // ms
-  private readonly MIN_FRAME_INTERVAL = 33;  // ~30fps cap
+  private readonly MIN_FRAME_INTERVAL = 33; // ~30fps cap
 
   // Performance tracking
   private frameProcessingTimes: number[] = [];
@@ -63,12 +63,72 @@ class ScreenCaptureManager {
   private readonly MAX_WIDTH = 1920;
   private readonly PERFORMANCE_CHECK_INTERVAL = 2000; // ms
 
-  private subscribers: Array<(frame: Buffer, dimensions: { width: number; height: number }) => void> = [];
-  private screenSize = robot.getScreenSize();
+  private subscribers: Array<
+    (frame: Buffer, dimensions: { width: number; height: number }) => void
+  > = [];
   private cachedDimensions = this.getScaledDimensions();
 
+  // Add these properties
+  private currentView: VNCView | null = null;
+  // Move screenSize to be initialized first
+  private readonly screenSize: { width: number; height: number };
+
+  private getScaledDimensions() {
+    if (!this.screenSize || !this.screenSize.width) {
+      console.error("Screen size not initialized");
+      return { width: 1440, height: 810 }; // Safe fallback
+    }
+
+    if (!this.currentView) {
+      // Full screen behavior
+      const { width } = this.quality;
+      const { width: realWidth, height: realHeight } = this.screenSize;
+      const height = Math.floor(width * (realHeight / realWidth));
+      console.log("Full screen dimensions:", { width, height });
+      return { width, height };
+    }
+
+    // View-specific scaling
+    const viewAspectRatio = this.currentView.rect.width / this.currentView.rect.height;
+    const targetWidth = Math.min(this.quality.width, this.currentView.rect.width);
+    const targetHeight = Math.floor(targetWidth / viewAspectRatio);
+    console.log("View dimensions:", { width: targetWidth, height: targetHeight });
+    return { width: targetWidth, height: targetHeight };
+  }
+
+  public setCurrentView(view: VNCView | null) {
+    try {
+      console.log("Setting view:", view);
+      this.currentView = view;
+      this.cachedDimensions = this.getScaledDimensions();
+      console.log("New cached dimensions:", this.cachedDimensions);
+    } catch (error) {
+      console.error("Error setting view:", error);
+    }
+  }
+
+
   private constructor() {
-    this.setupPerformanceMonitoring();
+    try {
+      // Initialize screenSize first
+      this.screenSize = robot.getScreenSize();
+      console.log("Screen size initialized:", this.screenSize);
+
+      // Initialize cached dimensions with default full screen values
+      this.cachedDimensions = {
+        width: this.quality.width,
+        height: Math.floor(
+          this.quality.width * (this.screenSize.height / this.screenSize.width)
+        ),
+      };
+
+      this.setupPerformanceMonitoring();
+    } catch (error) {
+      console.error("Error in constructor:", error);
+      // Provide fallback values
+      this.screenSize = { width: 1920, height: 1080 };
+      this.cachedDimensions = { width: 1440, height: 810 };
+    }
   }
 
   public static getInstance(): ScreenCaptureManager {
@@ -82,14 +142,19 @@ class ScreenCaptureManager {
     setInterval(() => {
       if (!this.isCapturing) return;
 
-      const dropRate = (this.droppedFrames / (this.droppedFrames + this.framesSent)) * 100;
+      const dropRate =
+        (this.droppedFrames / (this.droppedFrames + this.framesSent)) * 100;
       const avgFrameSize = this.lastFrameSize / 1024;
       const avgProcessingTime = this.getAverageProcessingTime();
 
       console.debug(
         `Performance: FPS=${this.framesSent}, Dropped=${this.droppedFrames}, ` +
-        `Drop Rate=${dropRate.toFixed(1)}%, Size=${avgFrameSize.toFixed(1)}KB, ` +
-        `Processing=${avgProcessingTime.toFixed(1)}ms, Quality=${this.quality.jpegQuality}`
+          `Drop Rate=${dropRate.toFixed(1)}%, Size=${avgFrameSize.toFixed(
+            1
+          )}KB, ` +
+          `Processing=${avgProcessingTime.toFixed(1)}ms, Quality=${
+            this.quality.jpegQuality
+          }`
       );
 
       this.droppedFrames = 0;
@@ -98,7 +163,10 @@ class ScreenCaptureManager {
   }
 
   public subscribe(
-    callback: (frame: Buffer, dimensions: { width: number; height: number }) => void
+    callback: (
+      frame: Buffer,
+      dimensions: { width: number; height: number }
+    ) => void
   ): () => void {
     this.subscribers.push(callback);
     if (!this.isCapturing) {
@@ -123,7 +191,10 @@ class ScreenCaptureManager {
       const timeSinceLastFrame = now - this.lastFrameSentTime;
 
       // Skip frame if we're processing or it's too soon
-      if (this.processingFrame || timeSinceLastFrame < this.MIN_FRAME_INTERVAL) {
+      if (
+        this.processingFrame ||
+        timeSinceLastFrame < this.MIN_FRAME_INTERVAL
+      ) {
         this.droppedFrames++;
         return;
       }
@@ -200,7 +271,9 @@ class ScreenCaptureManager {
       this.lastFrameSize = processedFrame.length;
 
       // Notify subscribers
-      this.subscribers.forEach((cb) => cb(processedFrame, this.cachedDimensions));
+      this.subscribers.forEach((cb) =>
+        cb(processedFrame, this.cachedDimensions)
+      );
     } catch (error) {
       console.error("Frame processing error:", error);
     } finally {
@@ -217,26 +290,41 @@ class ScreenCaptureManager {
 
   private async processFrame(frame: Buffer): Promise<Buffer> {
     const image = await jimp.createImage(frame);
-
+    const { width: fullWidth, height: fullHeight } = image;
+  
+    // If we have a current view, crop first
+    if (this.currentView) {
+      const { x, y, width, height } = this.currentView.rect;
+      
+      // Ensure crop coordinates are within bounds
+      const safeX = Math.max(0, Math.min(x, fullWidth));
+      const safeY = Math.max(0, Math.min(y, fullHeight));
+      const safeWidth = Math.min(width, fullWidth - safeX);
+      const safeHeight = Math.min(height, fullHeight - safeY);
+      
+      image.crop({x: safeX, y: safeY, w: safeWidth, h: safeHeight});
+    }
+  
+    // Calculate target dimensions
+    const { width: targetWidth, height: targetHeight } = this.getScaledDimensions();
+  
     // Resize if needed
-    if (image.width !== this.cachedDimensions.width || 
-        image.height !== this.cachedDimensions.height) {
+    if (image.width !== targetWidth || image.height !== targetHeight) {
       const resizeMode = this.isProcessingSlow()
-        ? ResizeStrategy.NEAREST_NEIGHBOR  // Faster but lower quality
-        : ResizeStrategy.BILINEAR;         // Better quality
-
+        ? ResizeStrategy.NEAREST_NEIGHBOR
+        : ResizeStrategy.BILINEAR;
+  
       image.resize({
-        w: this.cachedDimensions.width,
-        h: this.cachedDimensions.height,
+        w: targetWidth,
+        h: targetHeight,
         mode: resizeMode,
       });
     }
-
-    // Adjust quality based on motion
+  
     const quality = this.detectHighMotion()
       ? Math.max(this.MIN_QUALITY, this.quality.jpegQuality - 10)
       : this.quality.jpegQuality;
-
+  
     return image.getBuffer("image/jpeg", {
       quality,
       progressive: false,
@@ -274,10 +362,12 @@ class ScreenCaptureManager {
 
   private adjustQualityIfNeeded() {
     const now = Date.now();
-    if (now - this.lastPerformanceCheck < this.PERFORMANCE_CHECK_INTERVAL) return;
+    if (now - this.lastPerformanceCheck < this.PERFORMANCE_CHECK_INTERVAL)
+      return;
 
     const avgProcessingTime = this.getAverageProcessingTime();
-    const dropRate = this.droppedFrames / (this.droppedFrames + this.framesSent);
+    const dropRate =
+      this.droppedFrames / (this.droppedFrames + this.framesSent);
 
     if (dropRate > 0.2 || avgProcessingTime > this.MIN_FRAME_INTERVAL) {
       // Reduce quality more aggressively when dropping frames
@@ -285,59 +375,54 @@ class ScreenCaptureManager {
         this.MIN_QUALITY,
         this.quality.jpegQuality - 5
       );
-      this.quality.width = Math.max(
-        this.MIN_WIDTH,
-        this.quality.width - 128
-      );
+      this.quality.width = Math.max(this.MIN_WIDTH, this.quality.width - 128);
       this.cachedDimensions = this.getScaledDimensions();
-    } 
-    else if (dropRate < 0.05 && avgProcessingTime < this.MIN_FRAME_INTERVAL * 0.5) {
+    } else if (
+      dropRate < 0.05 &&
+      avgProcessingTime < this.MIN_FRAME_INTERVAL * 0.5
+    ) {
       // Gradually improve quality when performance is good
       this.quality.jpegQuality = Math.min(
         this.MAX_QUALITY,
         this.quality.jpegQuality + 1
       );
-      this.quality.width = Math.min(
-        this.MAX_WIDTH,
-        this.quality.width + 64
-      );
+      this.quality.width = Math.min(this.MAX_WIDTH, this.quality.width + 64);
       this.cachedDimensions = this.getScaledDimensions();
     }
 
     this.lastPerformanceCheck = now;
   }
 
-  private getScaledDimensions() {
-    const { width } = this.quality;
-    const { width: realWidth, height: realHeight } = this.screenSize;
-    const height = Math.floor(width * (realHeight / realWidth));
-    return { width, height };
-  }
-
   public updateQualitySettings(quality: Partial<VNCQualitySettings>) {
     let changed = false;
 
-    if (quality.width !== undefined && 
-        quality.width >= this.MIN_WIDTH && 
-        quality.width <= this.MAX_WIDTH && 
-        quality.width !== this.quality.width) {
+    if (
+      quality.width !== undefined &&
+      quality.width >= this.MIN_WIDTH &&
+      quality.width <= this.MAX_WIDTH &&
+      quality.width !== this.quality.width
+    ) {
       this.quality.width = quality.width;
       this.cachedDimensions = this.getScaledDimensions();
       changed = true;
     }
 
-    if (quality.jpegQuality !== undefined && 
-        quality.jpegQuality >= this.MIN_QUALITY && 
-        quality.jpegQuality <= this.MAX_QUALITY && 
-        quality.jpegQuality !== this.quality.jpegQuality) {
+    if (
+      quality.jpegQuality !== undefined &&
+      quality.jpegQuality >= this.MIN_QUALITY &&
+      quality.jpegQuality <= this.MAX_QUALITY &&
+      quality.jpegQuality !== this.quality.jpegQuality
+    ) {
       this.quality.jpegQuality = quality.jpegQuality;
       changed = true;
     }
 
-    if (quality.fps !== undefined && 
-        quality.fps >= 1 && 
-        quality.fps <= 60 && 
-        quality.fps !== this.quality.fps) {
+    if (
+      quality.fps !== undefined &&
+      quality.fps >= 1 &&
+      quality.fps <= 60 &&
+      quality.fps !== this.quality.fps
+    ) {
       this.quality.fps = quality.fps;
       changed = true;
     }
@@ -382,11 +467,16 @@ class ScreenCaptureManager {
  */
 class VSCodeVNCConnection {
   private unsubscribe: (() => void) | null = null;
-  private screenSize = robot.getScreenSize();
 
   constructor(private ws: WebSocket) {
     this.setupWebSocketHandlers();
     this.subscribeToFrameUpdates();
+  }
+
+  // Add method to handle view changes
+  private async handleViewChange(data: any) {
+    const { view } = data;
+    ScreenCaptureManager.getInstance().setCurrentView(view);
   }
 
   private setupWebSocketHandlers() {
@@ -419,6 +509,9 @@ class VSCodeVNCConnection {
             parsedMessage
           );
           break;
+        case "view-change":
+          await this.handleViewChange(parsedMessage);
+          return;
         default:
           if (this.isSupportedCommand(messageData)) {
             await handleCommand(messageData as never, this.ws);
@@ -488,23 +581,32 @@ class VSCodeVNCConnection {
     });
   }
 
-  private getScaledDimensions() {
-    const { width } = ScreenCaptureManager.getInstance()["quality"];
-    const { width: realWidth, height: realHeight } = this.screenSize;
-    const height = Math.floor(width * (realHeight / realWidth));
-    return { width, height };
-  }
-
   private async handleMouseEvent(data: any) {
     try {
       const { x, y, eventType, screenWidth, screenHeight } = data;
-
-      // Convert from client space to actual screen coordinates
-      const actualX = Math.floor((x / screenWidth) * this.screenSize.width);
-      const actualY = Math.floor((y / screenHeight) * this.screenSize.height);
-
+      const manager = ScreenCaptureManager.getInstance();
+      const currentView = manager['currentView'];
+      const screenSize = robot.getScreenSize();
+  
+      let actualX: number;
+      let actualY: number;
+  
+      if (currentView) {
+        // For views, convert coordinates relative to the view's dimensions
+        const viewRect = currentView.rect;
+        const scaleX = viewRect.width / screenWidth;
+        const scaleY = viewRect.height / screenHeight;
+        
+        actualX = Math.floor(viewRect.x + (x * scaleX));
+        actualY = Math.floor(viewRect.y + (y * scaleY));
+      } else {
+        // For full screen, scale to actual screen dimensions
+        actualX = Math.floor((x / screenWidth) * screenSize.width);
+        actualY = Math.floor((y / screenHeight) * screenSize.height);
+      }
+  
       robot.moveMouse(actualX, actualY);
-
+  
       switch (eventType) {
         case "down":
           robot.mouseToggle("down", "left");
