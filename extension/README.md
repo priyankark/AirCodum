@@ -65,6 +65,25 @@ Check out this demo to understand how to use AirCodum: [AirCodum YouTube Demo](h
 - **Image Analysis**: Send images from your smartphone to the VS Code instance and use AI for text extraction or analysis
 - **Smart Commands**: Control VS Code using natural language. 800+ commands supported.
 - **Screen Capture**: Take screenshots of your development environment and get them sent to your AirCodum app.
+- **VNC Mode**: Control your VS Code instance visually through your smartphone's screen, just like a remote desktop.
+
+### VNC Mode
+
+VNC Mode allows you to control VS Code directly through your smartphone's screen, providing a remote desktop-like experience:
+
+1. **Enabling VNC Mode**:
+   - In your AirCodum mobile app, tap the "VNC Mode" button in the bottom navigation
+   - Your VS Code screen will start streaming to your phone in real-time
+
+2. **Interacting with VS Code**:
+   - Tap anywhere on the screen to move the cursor
+   - Use the custom keyboard integarted in the app to type
+   - Use voice on your phone to code!
+
+3. **Performance Tips**:
+   - Ensure both devices are on the same network for best performance
+   - Use landscape mode on your phone for a better view
+   - Consider disabling VNC Mode when not needed to save resources
 
 ## Using AirCodum
 
@@ -123,7 +142,6 @@ Chat-based Commands:
 - `open file [filename]`: Opens a file
 - `search [text]`: Searches in the current file
 - `replace [old] with [new]`: Replaces text
-- `get screenshot`: Captures a screenshot
 
 VS Code Commands (examples):
 - `Toggle Zen Mode`: Enters or exits Zen Mode

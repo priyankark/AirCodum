@@ -35,7 +35,7 @@ class ScreenCaptureManager {
   private quality: VNCQualitySettings = {
     width: 1440,        // Default width for good quality
     jpegQuality: 85,    // Start with good quality
-    fps: 30,           // Target FPS
+    fps: 45,           // Target FPS
   };
 
   // Frame management

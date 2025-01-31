@@ -69,6 +69,39 @@ Check out this demo to understand how to use AirCodum: [AirCodum YouTube Demo](h
 - **Image Analysis**: Send images from your smartphone to the VS Code instance and use AI for text extraction or analysis
 - **Smart Commands**: Control VS Code using natural language. 800+ commands supported.
 - **Screen Capture**: Take screenshots of your development environment and get them sent to your AirCodum app.
+- **VNC Support**: Remote desktop functionality allowing you to view and control your VS Code instance in real-time through your smartphone.
+
+## VNC Support
+
+AirCodum includes VNC (Virtual Network Computing) capabilities, enabling real-time remote desktop functionality:
+
+### Setting up VNC
+
+1. In VS Code, open the Command Palette (Ctrl+Shift+P or Cmd+Shift+P)
+2. Type "AirCodum: Start VNC Server" and select it
+3. The VNC server will start on a default port (typically 5900)
+4. The connection details will be displayed in the VS Code status bar
+
+### Using VNC from Your Smartphone
+
+1. Open the AirCodum app on your smartphone
+2. Navigate to the VNC section
+3. Enter your computer's IP address and the VNC port
+4. Connect to view your VS Code instance in real-time
+5. Use touch gestures to control your VS Code:
+   - Single tap for click
+   - Custom keyboard available for typing and controlling
+   - Voice support!
+
+### VNC Security
+
+- Use over local, trusted network only!
+
+### VNC Performance Tips
+
+- Ensure both devices are on the same network for optimal performance
+- Use landscape mode on your smartphone for better viewing
+- Consider reducing VS Code's UI scaling for better visibility on mobile
 
 ## Using AirCodum
 
