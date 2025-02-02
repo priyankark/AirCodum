@@ -39,7 +39,7 @@ class Store {
       server: {
         isRunning: false,
         address: null,
-        port: 5000,
+        port: 11040,
       },
       webview: {
         panel: null,

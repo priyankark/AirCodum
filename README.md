@@ -53,7 +53,7 @@ Check out this demo to understand how to use AirCodum: [AirCodum YouTube Demo](h
 1. Go to File > Preferences > Settings (Ctrl+, or Cmd+,)
 2. Search for "AirCodum"
 3. Find the "Port" setting and change it to your desired port number
-4. The default port is 5000
+4. The default port is 11040
 
 ## Getting Started
 
