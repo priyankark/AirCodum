@@ -7,6 +7,7 @@
 4. [Getting Started](#getting-started)
 5. [Features](#features)
 6. [Using AirCodum](#using-aircodum)
+   - [Remote Access using Tailscale](#remote-access-using-tailscale)
 7. [Command Reference](#command-reference)
 8. [Security Considerations](#security-considerations)
 9. [Troubleshooting](#troubleshooting)
@@ -126,6 +127,30 @@ Type commands in the chat input to control VS Code. For example:
 2. AirCodum will automatically transcribe any text found in the image
 3. The transcribed text will appear in the "Transcription" section of the interface
 4. You can copy the transcription to the clipboard or add it to the current file
+
+### Remote Access using Tailscale
+
+Tailscale enables secure remote access to your AirCodum server from anywhere:
+
+1. Install Tailscale on both your computer and mobile device:
+   - Computer: Visit [Tailscale Downloads](https://tailscale.com/download)
+   - Mobile: Install from your device's app store
+
+2. Set up Tailscale:
+   - Create a Tailscale account if you don't have one
+   - Sign in on both devices
+   - They will automatically connect to your Tailscale network
+
+3. Configure AirCodum with Tailscale:
+   ```bash
+   tailscale serve 11040  # Or your configured AirCodum port
+   ```
+
+4. Connect from your mobile device:
+   - Use your computer's Tailscale IP or MagicDNS hostname
+   - Example: `your-computer.tail-scale.ts.net:11040`
+
+**Security Note**: While Tailscale provides secure connectivity, only use remote access over trusted networks for optimal security.
 
 ## Command Reference
 

@@ -7,6 +7,7 @@
 4. [Getting Started](#getting-started)
 5. [Features](#features)
 6. [Using AirCodum](#using-aircodum)
+   - [Remote Access using Tailscale](#remote-access-using-tailscale)
 7. [Command Reference](#command-reference)
 8. [Security Considerations](#security-considerations)
 9. [Troubleshooting](#troubleshooting)
@@ -77,25 +78,20 @@ AirCodum includes VNC (Virtual Network Computing) capabilities, enabling real-ti
 
 ### Setting up VNC
 
-1. In VS Code, open the Command Palette (Ctrl+Shift+P or Cmd+Shift+P)
-2. Type "AirCodum: Start VNC Server" and select it
-3. The VNC server will start on a default port (typically 5900)
-4. The connection details will be displayed in the VS Code status bar
+1. Connect to AirCodum by starting the AirCodum server as usual.
+2. The connection details will be displayed in the VS Code status bar
 
 ### Using VNC from Your Smartphone
 
-1. Open the AirCodum app on your smartphone
-2. Navigate to the VNC section
-3. Enter your computer's IP address and the VNC port
-4. Connect to view your VS Code instance in real-time
-5. Use touch gestures to control your VS Code:
+1. Connect to AirCodum server and simply toggle to VNC Mode
+2. Use touch gestures to control your VS Code:
    - Single tap for click
    - Custom keyboard available for typing and controlling
    - Voice support!
 
 ### VNC Security
 
-- Use over local, trusted network only!
+- Use over trusted network only!
 
 ### VNC Performance Tips
 
@@ -145,6 +141,30 @@ Type commands in the chat input to control VS Code. For example:
 3. The transcribed text will appear in the "Transcription" section of the interface
 4. You can copy the transcription to the clipboard or add it to the current file
 
+### Remote Access using Tailscale
+
+Tailscale enables secure remote access to your AirCodum server from anywhere:
+
+1. Install Tailscale on both your computer and mobile device:
+   - Computer: Visit [Tailscale Downloads](https://tailscale.com/download)
+   - Mobile: Install from your device's app store
+
+2. Set up Tailscale:
+   - Create a Tailscale account if you don't have one
+   - Sign in on both devices
+   - They will automatically connect to your Tailscale network
+
+3. Configure AirCodum with Tailscale:
+   ```bash
+   tailscale serve 11040  # Or your configured AirCodum port
+   ```
+
+4. Connect from your mobile device:
+   - Use your computer's Tailscale IP or MagicDNS hostname
+   - Example: `your-computer.tail-scale.ts.net:11040`
+
+**Security Note**: While Tailscale provides secure connectivity, only use remote access over trusted networks for optimal security.
+
 ## Command Reference
 
 Extension Commands:
@@ -160,7 +180,6 @@ Chat-based Commands:
 - `open file [filename]`: Opens a file
 - `search [text]`: Searches in the current file
 - `replace [old] with [new]`: Replaces text
-- `get screenshot`: Captures a screenshot
 
 VS Code Commands (examples):
 - `Toggle Zen Mode`: Enters or exits Zen Mode
