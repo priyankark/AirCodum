@@ -22,7 +22,7 @@ export async function startServer(address: string): Promise<void> {
     httpServer.listen(server.port, address, () => {
       console.log(`AirCodum server started at http://${address}:${server.port}`);
       vscode.window.showInformationMessage(
-        `AirCodum server started at http://${address}:${server.port}`
+        `AirCodum server started at http://localhost:${server.port}`
       );
       setServerRunning(true);
       setWebSocketServer(wss);

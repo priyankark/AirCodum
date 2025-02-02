@@ -115,7 +115,7 @@ function getWebviewContent(): string {
             </div>
             <div class="status-item">
                 <span>Port:</span>
-                <span class="status-value">5000</span>
+                <span class="status-value">11040</span>
             </div>
         </div>
         

@@ -39,7 +39,7 @@ export function activate(context: vscode.ExtensionContext) {
     }
 
     const address = getIPAddress();
-    await startServer(address);
+    await startServer('0.0.0.0');
     setServerRunning(true);
     setServerAddress(address);
     createWebviewPanel(context, address);
