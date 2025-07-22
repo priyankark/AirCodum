@@ -7,9 +7,10 @@
 		"outDir": "out",
 		"sourceMap": true,
 		"strict": true,
-		"rootDir": "src",
 		"skipLibCheck": true,
 		"resolveJsonModule": true,
+		"types": ["jest", "node"]
 	},
+	"include": ["src/**/*", "tests/**/*"],
 	"exclude": ["node_modules", ".vscode-test", "./src/scripts", "esbuild.js"],
 }
