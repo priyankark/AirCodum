@@ -1,6 +1,6 @@
 # Security, VNC latency, and keyboard review
 
-Reviewed September 7, 2026. Changes are proposed in draft PRs and span the AirCodum extension, Agentum CLI, and AirCodum-Agnentum-Mobile. This is a code review and remediation pass, not a certification that every security issue has been found or eliminated.
+Reviewed September 7, 2026. Changes are proposed in draft PRs and span the AirCodum VS Code extension and its original AirCodum-Mobile app (`com.codeair`). Separate Agentum CLI and AirCodum-Agnentum-Mobile PRs contain related improvements. This is a code review and remediation pass, not a certification that every security issue has been found or eliminated.
 
 ## Findings and implemented changes
 
@@ -40,11 +40,12 @@ Counts are npm audit's affected package counts, including transitive parent pack
 | --- | --- | --- |
 | AirCodum extension | 30 (1 critical, 8 high, 21 moderate) | 0 |
 | Agentum CLI | Not recorded before updates | 0 |
-| Mobile | 41 (2 critical, 21 high, 17 moderate, 1 low) | 13 (8 high, 5 moderate) |
+| Agentum mobile | 41 (2 critical, 21 high, 17 moderate, 1 low) | 13 (8 high, 5 moderate) |
+| Original AirCodum-Mobile | 73 (6 critical, 23 high, 37 moderate, 7 low) | 29 (1 critical, 12 high, 15 moderate, 1 low) |
 
 Compatible updates were applied. Agentum uses Node's `randomUUID` instead of the vulnerable older UUID package. Mobile pins compatible patched PostCSS and UUID transitive versions. The mobile iOS/Android build-number edits and unrelated presentation file predated this work and are preserved.
 
-**Remaining mobile findings:**
+**Remaining Agentum mobile findings:**
 
 1. `image-size` accounts for eight high findings through Metro/Expo parent packages. The installed parser is used by build tooling for image assets. The registry's latest release is 2.0.2, which remains affected by ICNS/JXL/HEIF infinite-loop advisories. Remediation needs an upstream fix or a reviewed parser replacement/backport in Metro/Expo, with malformed-image regression fixtures. An Expo major bump alone is not evidence this is fixed. Avoid feeding untrusted images to the build pipeline pending that work. See [ICNS advisory](https://github.com/advisories/GHSA-w3rx-r6r6-pgpr) and [JXL/HEIF advisory](https://github.com/advisories/GHSA-5p2g-fcmc-qvqq).
 2. `decode-uri-component` accounts for five moderate findings through query-string/navigation/router. Version 0.5.0 fixes malformed-percent-input CPU exhaustion, but changes the module to ESM; the existing query-string consumer uses CommonJS. Complete remediation requires a compatible query-string/navigation migration or a reviewed CommonJS backport, plus malformed deep-link and routing tests on device. A blind override would change the function shape consumed by that code. See the [upstream advisory](https://github.com/advisories/GHSA-vcc3-ghjq-m6fr).
@@ -66,3 +67,7 @@ Allow a focused dependency migration and native build/test pass for these remain
 See `CONNECTION_SETUP.md` for the new pairing and transport requirements. Webview restrictions follow [VS Code's guidance](https://code.visualstudio.com/api/extension-guides/webview#security); current ws updates were checked against the [upstream advisories](https://github.com/websockets/ws/security/advisories).
 
 Automatic capability selection and the remaining authentication migration boundary are documented in [COMPATIBILITY.md](COMPATIBILITY.md).
+
+## Original VS Code mobile app
+
+The primary companion is [AirCodum-Mobile](https://github.com/priyankark/AirCodum-Mobile), package `com.codeair`; Agentum is a separate app. The original app retains its command/file interface and receives the pairing, capability, keyboard and frame changes. Its Expo 51 stack has additional unresolved dependency findings, including tar in development tooling. A tar 7 override broke Expo CLI prebuild and was reverted. Compatible PostCSS, UUID and xmldom patches pass prebuild; see the original mobile PR validation report for exact evidence and remaining scope.

@@ -1,42 +1,22 @@
-# Automatic compatibility
+# AirCodum VS Code compatibility
 
-No rollout flags or manual feature switches are used. New servers send an additive `server_capabilities` WebSocket message **after authentication**, before initial session lists or VNC traffic. Existing protocol messages remain supported.
+This app (`com.codeair`) pairs with [AirCodum's VS Code extension](https://github.com/priyankark/AirCodum). [AirCodum-Agnentum-Mobile](https://github.com/priyankark/AirCodum-Agnentum-Mobile) is the separate Agentum app.
 
-```json
-{
-  "type": "server_capabilities",
-  "protocolVersion": 1,
-  "features": {
-    "agents": ["claude", "copilot", "codex"],
-    "pty": true,
-    "vnc": true,
-    "vncSharedPort": false,
-    "vncPort": 11043,
-    "vncStreamControl": true,
-    "vncTextInput": true
-  }
-}
-```
+No rollout flags or server version selection are needed. On each connection, a new extension announces `server_capabilities`, protocol version 1, with `vncSharedPort: true`. The app uses the existing main socket for commands, files, screen frames and native input. Capture start/stop and text insertion are enabled only when advertised.
 
-The extension advertises no agent/PTY support and `vncSharedPort: true`. Agentum advertises VNC only when its VNC listener starts successfully. Version 1's `vnc` capability includes pointer and special-key events; text insertion and start/stop support are separate flags. Missing flags default to disabled. Unsupported protocol versions enable no features. Capability announcements describe supported APIs, not whether external agent executables are installed or configured.
+An old extension sends no announcement. The app keeps the original `mouse-event` and `keyboard-event` wire format and never sends new JSON commands that old extensions could mistake for uploads. Its text composer requires the updated extension. Legacy automatic screen capture remains a server limitation.
 
-The mobile app:
+An empty pairing field supports old servers on loopback/Tailscale or TLS. A supplied token is always sent; HTTP 401/403 stops retries and shows pairing instructions. The app never retries anonymously after a rejected token. New servers require the pairing token from the VS Code command **AirCodum: Copy Pairing Token**. It is saved in native SecureStore.
 
-- Filters mode/provider tabs and text controls to supported features.
-- Uses the main port automatically for extension VNC. For separate listeners, an explicit advanced VNC port wins; otherwise a valid advertised port is used for direct private connections, or the existing next-port convention for TLS. A reverse proxy can still need an external-port override. The server cannot redirect the app to another host or downgrade TLS.
-- Identifies older Agentum providers from their unsolicited session lists and older extensions from their existing `screen-update` messages. No speculative session/capability requests are sent: old extensions can mistake unknown JSON for file uploads.
-- Reuses the main socket for an old extension's automatic stream and translates pointer/special-key messages to `mouse-event`/`keyboard-event`. It does not send unsupported start/stop/text commands. Those servers cannot provide on-demand capture or the new text composer until updated.
-- Allows an empty token for old servers on the already permitted transports. Supplying a token always sends it; a failed authenticated connection is never retried anonymously. Android HTTP 401/403 failures, including statuses in `close.reason`, stop retries and show a pairing prompt.
-- Re-detects features on every connection. Existing loopback/Tailscale connections without a saved TLS preference retain their permitted transport. Public/ordinary LAN plaintext addresses remain blocked.
+| App | Extension | Behavior |
+| --- | --- | --- |
+| Old | Old | Existing behavior; installing this PR elsewhere does not move an existing connection. |
+| New | Old | Existing commands, uploads and legacy VNC; new text/stream-control features disabled. |
+| New | New | Secure pairing and automatically enabled supported features. |
+| Old | New | Rejected because the old app cannot supply a pairing token. Update the app before updating its server. |
 
-## Compatibility boundary
+App-store review does not require a remotely managed rollout. Publish the compatible app first; users can update their extension after installing it. Automatic feature negotiation cannot add authentication to an already shipped binary. No extension is published or auto-updated by these draft PRs.
 
-Automatic feature selection does not manufacture credentials for old mobile binaries. An old unauthenticated app remains rejected by a new authenticated server. Pairing and supported encrypted/private transport are still required for the secured stack. This change does not add an anonymous-access flag to either server or eliminate that one-time app/server migration requirement.
+## Server announcement
 
-## Validation
-
-The mobile unit suite covers modern/legacy/unknown announcements, disabled features, port selection, legacy wire mapping, empty-token headers and authentication-error classification. Server integration tests verify announcements occur on authenticated sockets and reflect the extension topology or disabled VNC listener.
-
-`tests/android-vnc-e2e.py` in mobile exercises the actual Agentum server and native macOS input from Android, including bad-token rejection followed by successful pairing and exact desktop text/newline assertions.
-
-`tests/android-compatibility-e2e.py` in mobile uses the native Android app with controlled protocol fixtures (`tests/compatibility-fixture.cjs`) for legacy extension, modern extension topology and partial Agentum capabilities. These fixtures expose no desktop/agent functionality; they test mobile routing/feature selection, not complete legacy backend behavior. iOS/full VS Code-host compatibility and old server native bugs remain outside this validation.
+After authentication, this extension advertises protocol version 1 with no agent or PTY support, `vnc: true`, `vncSharedPort: true`, `vncStreamControl: true`, and `vncTextInput: true`. Existing mouse/key message names remain accepted. See `extension/tests/vscode-native.cjs` and the original mobile app native runner for the real VS Code integration test.

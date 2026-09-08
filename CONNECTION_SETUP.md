@@ -1,39 +1,19 @@
-# Connecting the updated stack
+# Connecting AirCodum to VS Code
 
-The updated app detects supported server features automatically; see `COMPATIBILITY.md`. Old unauthenticated apps are still rejected by the authenticated servers. Keep pairing tokens private: they grant desktop and terminal control.
+Use [AirCodum-Mobile](https://github.com/priyankark/AirCodum-Mobile), package `com.codeair`, with this extension. [AirCodum-Agnentum-Mobile](https://github.com/priyankark/AirCodum-Agnentum-Mobile) is the separate app for Agentum CLI.
 
-## Agentum
+1. Install dependencies and run `npm run compile` under `extension/`, then load the extension in a trusted VS Code workspace.
+2. Set application-level `aircodum.bindAddress` to the desktop's actual Tailscale IP, or keep localhost behind a TLS reverse proxy. Servers reject wildcard/public/ordinary LAN binds. An address in the Tailscale range alone does not create encryption.
+3. Run **Start AirCodum Server**, then **AirCodum: Copy Pairing Token** in the Command Palette.
+4. In the original mobile app, enter the host, port **11040**, and pairing token. Select TLS for a certificate-validated HTTPS proxy, or **Tailscale / localhost (ws)** for the protected direct connection. A TLS proxy must forward WebSocket upgrades and Authorization headers.
+5. Open VNC. Commands, uploads, frames and input share one socket. Supported features are detected automatically; see [COMPATIBILITY.md](COMPATIBILITY.md).
 
-1. Run `npm install` and `npm run build` in agentum-cli.
-2. For Tailscale, run `ag server --host <your-desktop-Tailscale-IP>`. The terminal port is 11042 and VNC is 11043 by default. Listeners reject wildcard, public, and ordinary LAN binds. Without `--host`, they listen only on localhost.
-3. Run `ag pairing-token` locally and paste the token into the mobile connection settings. The generated token is stored at `~/.agentum/pairing-token`, mode 0600; `AGENTUM_AUTH_TOKEN` can supply a 32–256 character token instead. Both ports use the same token.
-4. In mobile, enter the Tailscale IPv4 address and port 11042. Select **Tailscale / localhost (ws)**. This must be an actual Tailscale interface; an address in the same range alone does not create encryption. Leave the VNC port blank to use the next port, or enter 11043.
-5. For TLS, leave servers on localhost and configure an HTTPS reverse proxy to forward WebSocket upgrades and the `Authorization` header. Enter its hostname/ports in mobile and enable TLS. Certificates must be trusted by the device. Do not bypass certificate checks.
+Tokens grant desktop control and are stored in VS Code SecretStorage and the app's native SecureStore. Restarting the extension preserves its token. Re-enter the OpenAI API key once in the extension webview; it is also stored in SecretStorage. Existing workspace `.env` files remain untouched.
 
-A token is stable across server restarts. To revoke it, stop the server, remove only the pairing-token file (or replace the environment token), restart, and pair the app again. Restarting closes existing authorized connections.
+Rebuild the mobile native binary to include SecureStore. Expo exports or Metro reloads alone cannot add a native module. Run Expo prebuild for Android or install iOS pods using the app's existing native build workflow.
 
-Agent execution now uses normal permission/sandbox behavior. A local operator who explicitly needs the previous unrestricted behavior can set `AGENTUM_ALLOW_UNSANDBOXED=1` before starting the server; it is not configurable by a remote message.
+Send inserts the local text draft; Enter presses a separate desktop key. Leaving VNC or backgrounding the app stops capture when supported by the server. Old extensions retain their legacy automatic capture behavior.
 
-## VS Code extension
+Validation commands: `npm run compile` and `npm run test:security` in the extension; `npx tsc --noEmit` and `npm run test:security` in the original mobile repo. See [NATIVE_VALIDATION.md](NATIVE_VALIDATION.md) for real VS Code and Android testing.
 
-1. Run `npm install` and `npm run compile` under `extension/`, then load the updated extension in a trusted VS Code workspace.
-2. Set the application-level `aircodum.bindAddress` setting to the desktop's Tailscale IP, or retain localhost behind a TLS reverse proxy.
-3. Run **Start AirCodum Server**, then **AirCodum: Copy Pairing Token** from the Command Palette.
-4. In mobile use port **11040**, the app automatically uses the same port for VNC. The extension serves both connections on the same listener. Agent session modes require Agentum, not the extension.
-5. Paste the extension's token and select the matching transport. The extension and Agentum have different pairing credentials.
-
-Re-enter the OpenAI API key once in the extension's webview. It is now saved in VS Code SecretStorage; the extension no longer reads or writes workspace `.env` keys. Existing `.env` files are untouched. If a previous key was committed or exposed in logs, rotate it and remove it from the relevant history separately.
-
-## Mobile/native build
-
-Install dependencies, then rebuild the app to include `expo-secure-store`. The existing iOS/Android directories are generated and ignored by Git. Use your existing native-build workflow; for an existing iOS project run CocoaPods installation before building. Keep `newArchEnabled: false` with Reanimated 3 unless performing an intentional architecture migration.
-
-Open VNC to start streaming. Leaving VNC, backgrounding, or disconnecting stops that stream. Text is composed locally: **Send** types the draft, and **Enter** presses the desktop's Enter key separately. Navigation and shortcut keys send immediately.
-
-## Checks
-
-- Extension: `npm run compile` and `npm run test:security`.
-- Agentum: `npm run test:security` (also builds).
-- Mobile: `npx tsc --noEmit`, `npm run test:security`, and Expo exports for iOS/Android.
-
-The security tests use Node's test runner and timer mocks; run them on Node 22 or newer. Older manually maintained Agentum test clients must send `{ headers: { Authorization: 'Bearer <token>' } }` in their `ws` constructor options. They cannot connect anonymously anymore.
+The separate Agentum stack uses ports 11042/11043 and its own pairing credential. Its setup belongs to the [Agentum CLI PR](https://github.com/priyankark/agentum-cli/pull/3).

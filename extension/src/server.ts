@@ -1,5 +1,5 @@
 import * as http from "http";
-import WebSocket from "ws";
+import { WebSocketServer } from "ws";
 import * as vscode from "vscode";
 import { handleWebSocketConnection } from "./websockets";
 import { store } from "./state/store";
@@ -16,7 +16,7 @@ export async function startServer(address: string, token: string): Promise<void>
   if (!protectedBind(address)) throw new Error("Use localhost behind a TLS proxy, or bind to your Tailscale interface IP.");
   starting = true;
   const httpServer = http.createServer((_req, res) => { res.writeHead(404); res.end(); });
-  const wss = new WebSocket.Server({
+  const wss = new WebSocketServer({
     server: httpServer, maxPayload: MAX_PAYLOAD, perMessageDeflate: false,
     verifyClient: ({ req }: { req: import('http').IncomingMessage }) => wss.clients.size < 4 && authorized(req, token),
   });
