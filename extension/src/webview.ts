@@ -3,11 +3,15 @@ import { getApiKey, saveApiKey } from "./ai/utils";
 import { setWebviewPanel } from "./state/actions";
 import { handleChat } from "./ai/api";
 
+import { randomBytes } from "crypto";
+
 function getWebviewContent(): string {
+  const nonce = randomBytes(24).toString("hex");
   return `<!DOCTYPE html>
   <html lang="en">
   <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AirCodum</title>
     <style>
@@ -122,7 +126,7 @@ function getWebviewContent(): string {
         <div>
             <h2>OpenAI API Key</h2>
             <input type="password" id="apiKeyInput" placeholder="Enter your OpenAI API key">
-            <button onclick="saveApiKey()">Save Key</button>
+            <button data-action="saveApiKey">Save Key</button>
         </div>
         
         <div id="fileContainer" style="display: none;">
@@ -134,17 +138,17 @@ function getWebviewContent(): string {
         <div id="transcriptionContainer" style="display: none;">
             <h2>Transcription</h2>
             <pre id="transcription"></pre>
-            <button onclick="copyToClipboard('transcription')">Copy to Clipboard</button>
-            <button onclick="addToCurrentFile('transcription')">Add to Current File</button>
+            <button data-action="copyToClipboard" data-target="transcription">Copy to Clipboard</button>
+            <button data-action="addToCurrentFile" data-target="transcription">Add to Current File</button>
         </div>
         
         <div id="chatContainer">
             <h2>Chat with AI</h2>
             <input type="text" id="chatInput" placeholder="Ask about the file or code...">
-            <button onclick="chat()">Send</button>
+            <button data-action="chat">Send</button>
             <div id="chatResponse" style="display: none;"></div>
-            <button onclick="copyToClipboard('chatResponse')" style="display: none;">Copy to Clipboard</button>
-            <button onclick="addToCurrentFile('chatResponse')" style="display: none;">Add to Current File</button>
+            <button data-action="copyToClipboard" data-target="chatResponse" style="display: none;">Copy to Clipboard</button>
+            <button data-action="addToCurrentFile" data-target="chatResponse" style="display: none;">Add to Current File</button>
         </div>
         
         <div id="waitingMessage">
@@ -154,8 +158,12 @@ function getWebviewContent(): string {
         <div id="errorContainer" class="error" style="display: none;"></div>
     </div>
   
-    <script>
+    <script nonce="${nonce}">
         const vscode = acquireVsCodeApi();
+        const actions = { saveApiKey, copyToClipboard, addToCurrentFile, chat };
+        document.querySelectorAll('[data-action]').forEach(button => {
+          button.addEventListener('click', () => actions[button.dataset.action](button.dataset.target));
+        });
   
         function saveApiKey() {
             const apiKey = document.getElementById('apiKeyInput').value;
@@ -163,6 +171,7 @@ function getWebviewContent(): string {
                 command: 'saveApiKey',
                 key: apiKey
             });
+            document.getElementById('apiKeyInput').value = '';
         }
   
         function copyToClipboard(elementId) {
@@ -213,9 +222,6 @@ function getWebviewContent(): string {
                 case 'chatResponse':
                     handleChatResponseMessage(message);
                     break;
-                case 'apiKey':
-                    document.getElementById('apiKeyInput').value = message.key;
-                    break;
                 case 'ipAddress':
                     document.getElementById('ipAddress').textContent = message.ipAddress;
                     break;
@@ -253,7 +259,7 @@ function getWebviewContent(): string {
         }
   
         // Request the API key when the webview loads
-        vscode.postMessage({ command: 'getApiKey' });
+        vscode.postMessage({ command: 'ipAddress' });
     </script>
   </body>
   </html>`;
@@ -269,12 +275,13 @@ export function createWebviewPanel(
     vscode.ViewColumn.Two,
     {
       enableScripts: true,
+      localResourceRoots: [],
       retainContextWhenHidden: true, // Add this option
     }
   );
 
   panel.webview.html = getWebviewContent();
-  const apiKey = getApiKey();
+
 
   // Send the IP address to the webview
   panel.webview.postMessage({ type: "ipAddress", ipAddress: address });
@@ -290,21 +297,19 @@ export function createWebviewPanel(
 
   panel.webview.onDidReceiveMessage(
     async (message) => {
+      if (!message || typeof message.command !== "string") return;
       switch (message.command) {
         case "addToCurrentFile":
           addToCurrentFile(message.text);
-          break;
-        case "getApiKey":
-          panel?.webview.postMessage({ type: "apiKey", key: apiKey || "" });
           break;
         case "ipAddress":
           panel?.webview.postMessage({ type: "ipAddress", ipAddress: address });
           break;
         case "saveApiKey":
-          saveApiKey(message.key);
+          await saveApiKey(message.key);
           break;
         case "chat":
-          await handleChat(message.prompt, apiKey);
+          if (typeof message.prompt === "string" && message.prompt.length <= 4096) await handleChat(message.prompt, getApiKey());
           break;
         case "showInfo":
           vscode.window.showInformationMessage(message.message);

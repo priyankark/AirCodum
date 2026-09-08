@@ -1,43 +1,24 @@
-import path = require("path");
 import * as vscode from "vscode";
-import * as fs from "fs";
-import * as dotenv from "dotenv";
+import { randomBytes } from "crypto";
+let secrets: vscode.SecretStorage;
+let apiKey: string | undefined;
 
-export function getApiKey(): string | undefined {
-  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-  if (!workspaceFolder) {
-    vscode.window.showErrorMessage("No workspace folder open");
-    return undefined;
-  }
-
-  const envPath = path.join(workspaceFolder.uri.fsPath, ".env");
-  if (fs.existsSync(envPath)) {
-    const envConfig = dotenv.parse(fs.readFileSync(envPath));
-    return envConfig.OPENAI_API_KEY;
-  }
-  return undefined;
+export async function initializeSecrets(context: vscode.ExtensionContext) {
+  secrets = context.secrets;
+  apiKey = await secrets.get("aircodum.openaiApiKey");
 }
-
-export function saveApiKey(key: string): void {
-  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-  if (!workspaceFolder) {
-    vscode.window.showErrorMessage("No workspace folder open");
-    return;
+export function getApiKey(): string | undefined { return apiKey; }
+export async function saveApiKey(key: string): Promise<void> {
+  if (typeof key !== "string" || !key.trim() || key.length > 1024) return;
+  await secrets.store("aircodum.openaiApiKey", key.trim());
+  apiKey = key.trim();
+  vscode.window.showInformationMessage("API key saved securely.");
+}
+export async function getPairingToken(): Promise<string> {
+  let token = await secrets.get("aircodum.pairingToken");
+  if (!token) {
+    token = randomBytes(32).toString("hex");
+    await secrets.store("aircodum.pairingToken", token);
   }
-
-  const envPath = path.join(workspaceFolder.uri.fsPath, ".env");
-  let envConfig: { [key: string]: string } = {};
-  if (fs.existsSync(envPath)) {
-    envConfig = dotenv.parse(fs.readFileSync(envPath));
-  }
-  envConfig["OPENAI_API_KEY"] = key;
-  const envContent =
-    Object.entries(envConfig)
-      .map(([k, v]) => `${k}=${v}`)
-      .join("\n") + "\n";
-
-  fs.writeFileSync(envPath, envContent);
-  vscode.window.showWarningMessage(
-    "API key saved in .env file. Ensure this file is ignored in version control."
-  );
+  return token;
 }

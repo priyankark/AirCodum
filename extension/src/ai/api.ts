@@ -39,11 +39,11 @@ export async function transcribeImage(
   try {
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
+      signal: AbortSignal.timeout(30000),
       headers,
       body: JSON.stringify(payload),
     });
     const responseJson = await response.json();
-    console.log("OpenAI API response:", responseJson);
     return (responseJson as IOpenAIResponse).choices[0].message.content;
   } catch (error) {
     console.error("Error calling OpenAI API:", error);
@@ -101,12 +101,12 @@ export async function chatWithOpenAI(
   try {
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
+      signal: AbortSignal.timeout(30000),
       headers,
       body: JSON.stringify(payload),
     });
     const responseJson: IOpenAIResponse =
       (await response.json()) as IOpenAIResponse;
-    console.log("OpenAI Chat API response:", responseJson);
     return responseJson.choices?.[0].message.content ?? "No response from AI";
   } catch (error: any) {
     console.error("Error in handleChat:", error);

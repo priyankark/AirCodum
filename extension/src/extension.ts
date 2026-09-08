@@ -17,18 +17,17 @@
  */
 
 import * as vscode from "vscode";
-import { getIPAddress } from "./utils";
+import { initializeSecrets, getPairingToken } from "./ai/utils";
 import { store } from "./state/store";
 import {
   setServerAddress,
   setServerRunning,
-  setWebviewPanel,
 } from "./state/actions";
 import { startServer, stopServer } from "./server";
 import { createWebviewPanel } from "./webview";
 
-export function activate(context: vscode.ExtensionContext) {
-  console.log("AirCodum Extension is now active!");
+export async function activate(context: vscode.ExtensionContext) {
+  await initializeSecrets(context);
 
   const startServerAndWebview = async () => {
     if (store.getState().server.isRunning) {
@@ -38,8 +37,8 @@ export function activate(context: vscode.ExtensionContext) {
       return;
     }
 
-    const address = getIPAddress();
-    await startServer('0.0.0.0');
+    const address = vscode.workspace.getConfiguration("aircodum").get<string>("bindAddress", "127.0.0.1");
+    await startServer(address, await getPairingToken());
     setServerRunning(true);
     setServerAddress(address);
     createWebviewPanel(context, address);
@@ -52,13 +51,13 @@ export function activate(context: vscode.ExtensionContext) {
 
   const openWebViewCommand = vscode.commands.registerCommand(
     "extension.openAirCodumWebview",
-    () => {
+    async () => {
       const { webview, server } = store.getState();
       if (webview.panel) {
         webview.panel.reveal();
       } else {
         if (!server.isRunning) {
-          startServerAndWebview();
+          await startServerAndWebview();
         } else {
           createWebviewPanel(context, server.address!);
         }
@@ -77,25 +76,11 @@ export function activate(context: vscode.ExtensionContext) {
     openWebViewCommand
   );
 
-  // Subscribe to state changes
-  const unsubscribe = store.subscribe((state) => {
-    console.log("State updated:", state);
-    // You can perform actions based on state changes here
-  });
+  context.subscriptions.push(vscode.commands.registerCommand("extension.copyAirCodumPairingToken", async () => {
+    await vscode.env.clipboard.writeText(await getPairingToken());
+    vscode.window.showInformationMessage("Pairing token copied. Paste it into the mobile connection settings.");
+  }));
 
-  context.subscriptions.push({ dispose: unsubscribe });
 }
 
-export function deactivate() {
-  const wss = store.getState().websocket.wss;
-  const panel = store.getState().webview.panel;
-  if (wss) {
-    wss.close(() => {
-      console.log("WebSocket server closed.");
-    });
-  }
-  if (panel) {
-    panel.dispose();
-    setWebviewPanel(null);
-  }
-}
+export function deactivate() { stopServer(); }

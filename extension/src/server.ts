@@ -4,49 +4,48 @@ import * as vscode from "vscode";
 import { handleWebSocketConnection } from "./websockets";
 import { store } from "./state/store";
 import { setServerRunning, setWebSocketServer } from "./state/actions";
+import { authorized, MAX_PAYLOAD, protectedBind } from "./security";
 
-export async function startServer(address: string): Promise<void> {
-  const { server } = store.getState();
+let listener: http.Server | undefined;
+let starting = false;
 
-  if (server.isRunning) {
-    vscode.window.showInformationMessage("AirCodum server is already running.");
-    return;
-  }
-
-  const httpServer = http.createServer();
-  const wss = new WebSocket.Server({ server: httpServer });
-
-  wss.on("connection", handleWebSocketConnection);
-
-  return new Promise((resolve, reject) => {
-    httpServer.listen(server.port, address, () => {
-      console.log(`AirCodum server started at http://${address}:${server.port}`);
-      vscode.window.showInformationMessage(
-        `AirCodum server started at http://localhost:${server.port}`
-      );
-      setServerRunning(true);
-      setWebSocketServer(wss);
-      resolve();
-    });
-    httpServer.on("error", reject);
+export async function startServer(address: string, token: string): Promise<void> {
+  if (store.getState().server.isRunning || starting) return;
+  if (!vscode.workspace.isTrusted) throw new Error("Trust this workspace before enabling remote control.");
+  if (token.length < 32) throw new Error("A pairing token is required.");
+  if (!protectedBind(address)) throw new Error("Use localhost behind a TLS proxy, or bind to your Tailscale interface IP.");
+  starting = true;
+  const httpServer = http.createServer((_req, res) => { res.writeHead(404); res.end(); });
+  const wss = new WebSocket.Server({
+    server: httpServer, maxPayload: MAX_PAYLOAD, perMessageDeflate: false,
+    verifyClient: ({ req }: { req: import('http').IncomingMessage }) => wss.clients.size < 4 && authorized(req, token),
   });
+  wss.on("connection", handleWebSocketConnection);
+  listener = httpServer;
+  try {
+    await new Promise<void>((resolve, reject) => {
+      httpServer.once("error", reject);
+      httpServer.listen(store.getState().server.port, address, () => {
+        httpServer.removeListener("error", reject);
+        httpServer.on("error", () => stopServer());
+        setServerRunning(true);
+        setWebSocketServer(wss);
+        resolve();
+      });
+    });
+    vscode.window.showInformationMessage(`AirCodum listening on ${address}:${store.getState().server.port}. Use Copy Pairing Token to connect.`);
+  } catch (error) {
+    wss.close(); httpServer.close(); listener = undefined;
+    throw error;
+  } finally { starting = false; }
 }
 
 export function stopServer(): void {
   const { websocket, webview } = store.getState();
-
-  if (websocket.wss) {
-    websocket.wss.close(() => {
-      console.log("WebSocket server closed.");
-    });
-    setWebSocketServer(null);
-  }
-
+  for (const client of websocket.wss?.clients ?? []) client.terminate();
+  websocket.wss?.close();
+  listener?.close(); listener = undefined;
+  setWebSocketServer(null);
   setServerRunning(false);
-
-  if (webview.panel) {
-    webview.panel.dispose();
-  }
-
-  vscode.window.showInformationMessage("AirCodum server stopped");
+  webview.panel?.dispose();
 }

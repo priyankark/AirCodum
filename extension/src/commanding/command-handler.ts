@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import * as WebSocket from "ws";
+import WebSocket from "ws";
 import { BuiltInCommands, Commands } from "./commands";
 import { RobotJSCommandHandlers } from "./robotjs-handlers";
 import { chatWithOpenAI } from "../ai/api";
@@ -18,7 +18,6 @@ export async function handleCommand(
   command: keyof typeof Commands,
   ws: WebSocket
 ) {
-  console.log("Received command:", command);
   // Execute BuiltInCommands via VS Code API
   if (Object.keys(BuiltInCommands).includes(command)) {
     vscode.commands.executeCommand(
@@ -40,7 +39,7 @@ export async function handleCommand(
 
   if (command.toLowerCase().startsWith("keytap ")) {
     const key = command.slice(7).trim() as keyof typeof RobotJSCommandHandlers;
-    if (RobotJSCommandHandlers[key]) {
+    if (Object.prototype.hasOwnProperty.call(RobotJSCommandHandlers, key)) {
       RobotJSCommandHandlers[key]();
     } else {
       console.warn("Unhandled keytap command:", key);
@@ -56,8 +55,6 @@ export async function handleCommand(
 
   if (command.toLowerCase().startsWith("replace ")) {
     const [query, replacement] = command.slice(8).split(" with ");
-    console.log("query", query);
-    console.log("replacement", replacement);
     RobotJSCommandHandlers.replace(query, replacement);
     return;
   }

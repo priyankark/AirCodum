@@ -31,8 +31,23 @@
       {
         "command": "extension.openAirCodumWebview",
         "title": "Open AirCodum Webview"
+      },
+      {
+        "command": "extension.copyAirCodumPairingToken",
+        "title": "AirCodum: Copy Pairing Token"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "AirCodum",
+      "properties": {
+        "aircodum.bindAddress": {
+          "type": "string",
+          "default": "127.0.0.1",
+          "scope": "application",
+          "description": "Listen address. For remote access, use your encrypted VPN interface address or a TLS proxy."
+        }
+      }
+    }
   },
   "scripts": {
     "compile": "npm run check-types && node esbuild.js",
@@ -41,7 +56,8 @@
     "watch:esbuild": "node esbuild.js --watch",
     "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
     "vscode:prepublish": "npm run package",
-    "package": "npm run check-types && node esbuild.js --production"
+    "package": "npm run check-types && node esbuild.js --production",
+    "test:security": "node --require ./tests/register.cjs --test tests/*.test.cjs"
   },
   "devDependencies": {
     "@types/jimp": "^0.2.1",
@@ -68,5 +84,10 @@
     "openai": "^4.67.0",
     "screenshot-desktop": "^1.15.2",
     "ws": "^8.18.0"
+  },
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false
+    }
   }
 }
