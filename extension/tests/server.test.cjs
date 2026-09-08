@@ -3,13 +3,13 @@ const assert = require('node:assert/strict');
 const { once } = require('node:events');
 const Module = require('node:module');
 const { WebSocket } = require('ws');
-let captures = 0, uploads = 0, taps = [];
-const native = { getScreenSize: () => ({ width: 1440, height: 900 }), keyTap: key => taps.push(key), moveMouse() {}, mouseToggle() {}, typeString() {} };
+let captures = 0, uploads = 0, taps = [], typed = [], modifiers = [];
+const native = { getScreenSize: () => ({ width: 1440, height: 900 }), keyTap: (key, held = []) => { taps.push(key); modifiers = held; }, keyToggle: key => { modifiers = modifiers.filter(m => m !== key); }, moveMouse() {}, mouseToggle() {}, typeString(text) { if (!modifiers.length) typed.push(text); } };
 const originalLoad = Module._load;
 Module._load = function(name, ...args) {
   if (name === 'vscode') return { workspace: { isTrusted: true }, window: { showInformationMessage() {} } };
   if (name === './commanding/robotjs-handlers') return { typedRobot: native };
-  if (name === 'screenshot-desktop') return async () => { captures++; return Buffer.alloc(4096); };
+  if (name === './native-capture') return { capturePrimaryScreen: async () => { captures++; return Buffer.alloc(4096); }, nativeResizeJpeg: async () => null };
   if (name === './jimp') return { createImage: async () => ({ width: 1440, height: 900, getBuffer: async () => Buffer.from('frame') }) };
   if (name === './commanding/command-handler') return { handleCommand() {} };
   if (name === './files/utils') return { handleFileUpload() { uploads++; } };
@@ -50,6 +50,11 @@ test('extension requires pairing, streams only on demand, rejects malformed text
     delete serverSocket.bufferedAmount;
     const rejectedKey = message(client); client.send(JSON.stringify({ type: 'vnc_keyboard_event', key: 'constructor' }));
     assert.equal((await rejectedKey).type, 'error'); assert.deepEqual(taps, []);
+    client.send(JSON.stringify({ type: 'vnc_keyboard_event', key: 'a', modifier: ['command'] }));
+    client.send(JSON.stringify({ type: 'vnc_type', text: 'after shortcut' }));
+    const processed = message(client); client.send('{broken'); await processed;
+    assert.deepEqual(typed, ['after shortcut']);
+    assert.deepEqual(modifiers, []);
   } finally {
     const closed = client ? once(client, 'close') : Promise.resolve();
     stopServer(); await closed;

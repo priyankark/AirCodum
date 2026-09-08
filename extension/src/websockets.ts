@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import WebSocket from "ws";
 import { typedRobot as robot } from "./commanding/robotjs-handlers";
-import screenshot from "screenshot-desktop";
+import { capturePrimaryScreen, nativeResizeJpeg } from './native-capture';
 import { handleCommand } from "./commanding/command-handler";
 import { chatWithOpenAI } from "./ai/api";
 import { handleFileUpload } from "./files/utils";
@@ -126,7 +126,7 @@ export class ScreenCaptureManager {
       this.inFlight = true;
       const started = performance.now();
       try {
-        const raw = await screenshot();
+        const raw = await capturePrimaryScreen();
         if (!active()) return;
         const hash = crypto.createHash('sha256').update(raw).digest('hex');
         // Periodic refresh allows a slow/new subscriber to recover on an idle desktop.
@@ -155,6 +155,9 @@ export class ScreenCaptureManager {
   }
 
   private async processFrame(frame: Buffer, dimensions: { width: number; height: number }): Promise<Buffer> {
+    const nativeFrame = await nativeResizeJpeg(frame, dimensions, this.quality.jpegQuality);
+    if (nativeFrame) return nativeFrame;
+
     const image = await jimp.createImage(frame);
 
     // Resize if needed
@@ -436,10 +439,13 @@ class VSCodeVNCConnection {
   private async handleKeyboardEvent(data: any) {
     try {
       const { key, modifier } = data;
+      const nativeKey = key === 'return' ? 'enter' : key;
       if (modifier) {
-        robot.keyTap(key, modifier);
+        const modifiers = Array.isArray(modifier) ? modifier : [modifier];
+        try { robot.keyTap(nativeKey, modifiers); }
+        finally { for (const modifier of modifiers) robot.keyToggle(modifier, 'up'); }
       } else {
-        robot.keyTap(key);
+        robot.keyTap(nativeKey);
       }
     } catch (error) {
       console.error("Error handling keyboard event:", error);

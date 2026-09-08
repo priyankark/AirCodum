@@ -8,6 +8,9 @@ const token = 'a'.repeat(64);
 test('authentication rejects missing/wrong credentials, query tokens and browser origins', () => {
   const auth = headers => authorized({ headers }, token);
   assert.equal(auth({}), false);
+  assert.equal(auth({ origin: 'aircodum://native' }), false);
+  assert.equal(auth({ authorization: 'Bearer ' + token, origin: 'aircodum://native' }), true);
+  assert.equal(auth({ authorization: 'Bearer ' + token, origin: 'null' }), false);
   assert.equal(auth({ authorization: 'Bearer ' + 'b'.repeat(64) }), false);
   assert.equal(auth({ authorization: 'Bearer short' }), false);
   assert.equal(auth({ authorization: 'Bearer ' + token, origin: 'https://attacker.example' }), false);
@@ -41,7 +44,7 @@ test('real upgrade handshake exposes no connection before authentication', async
       await new Promise(resolve => client.once('error', resolve));
       assert.equal(connections, 0);
     }
-    const client = new WebSocket(url, { headers: { authorization: 'Bearer ' + token } });
+    const client = new WebSocket(url, { headers: { authorization: 'Bearer ' + token, origin: 'aircodum://native' } });
     await once(client, 'open');
     assert.equal(connections, 1);
     const closed = once(client, 'close');

@@ -37,6 +37,7 @@ const robot = require(robotjsPath);
 interface RobotJS {
   typeString(text: string): void;
   keyTap(key: string, modifiers?: string[]): void;
+  keyToggle(key: string, state: string, modifiers?: string[]): void;
   setKeyboardDelay(ms: number): void;
   moveMouse(x: number, y: number): void;
   mouseClick(button?: string): void;

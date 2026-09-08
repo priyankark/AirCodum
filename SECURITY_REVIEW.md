@@ -1,6 +1,6 @@
 # Security, VNC latency, and keyboard review
 
-Reviewed September 7, 2026. Changes are local and span the AirCodum extension, Agentum CLI, and AirCodum-Agnentum-Mobile. This is a code review and remediation pass, not a certification that every security issue has been found or eliminated.
+Reviewed September 7, 2026. Changes are proposed in draft PRs and span the AirCodum extension, Agentum CLI, and AirCodum-Agnentum-Mobile. This is a code review and remediation pass, not a certification that every security issue has been found or eliminated.
 
 ## Findings and implemented changes
 
@@ -24,7 +24,7 @@ Full-buffer SHA-256 replaces the 32-byte sampling heuristic that could miss smal
 
 Mobile removes the hidden-image/visible-image decode cycle. A dedicated component decodes one image and retains just one pending image, replacing it when a newer frame arrives. Frame contents no longer update the large app component. VNC runs only while its tab is foregrounded. Touch handling uses the current socket and measured image viewport, instead of initial stale state and a second delayed click handler.
 
-The deterministic scheduler tests show that the first frame is delivered without advancing through a 100 ms timer. This removes that **artificial delay**; it is not an end-to-end latency benchmark. Native capture, Jimp encoding, base64 overhead, network latency, and device decoding remain. Measure touch-to-paint p50/p95 on physical iOS and Android devices over direct Tailscale and a TLS proxy before claiming a latency percentage.
+The deterministic scheduler tests show that the first frame is delivered without advancing through a 100 ms timer. This removes that **artificial delay**; it is not an end-to-end latency benchmark. Native capture, encoding, base64 overhead, network latency, and device decoding remain. A subsequent Android emulator run found and fixed native handshake/keyboard bugs and measured the macOS capture optimization; see `NATIVE_VALIDATION.md`. Measure touch-to-paint p50/p95 on physical iOS and Android devices over direct Tailscale and a TLS proxy before claiming a latency percentage.
 
 ## Keyboard changes
 
@@ -56,7 +56,7 @@ Allow a focused dependency migration and native build/test pass for these remain
 - Extension TypeScript check and esbuild/native-addon packaging pass.
 - Agentum TypeScript build passes.
 - Mobile TypeScript check passes, including fixes to pre-existing speech-event and notification type errors.
-- Fourteen targeted tests cover real upgrade rejection, payload limits, native input validation, both actual server integrations, on-demand streaming, malformed text, listener release, scheduler timing/recovery/cancellation, keyboard composition/repeat, transport validation, and newest-frame decoding.
+- Eighteen targeted tests cover real upgrade rejection, payload limits, native input validation, both actual server integrations, on-demand streaming, malformed text, listener release, scheduler timing/recovery/cancellation, keyboard composition/repeat, transport validation, and newest-frame decoding.
 - Final iOS and Android JavaScript/Hermes bundle exports pass. These are separate from a native app build.
 - No physical-device test, store build, security penetration test, or deployment was performed.
 - The app intentionally has `newArchEnabled: false`; Reanimated stays on compatible major 3. Expo's generic version checker prefers major 4, which requires a separate new-architecture migration. This is an existing architecture constraint.

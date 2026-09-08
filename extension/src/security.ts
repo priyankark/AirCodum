@@ -5,8 +5,10 @@ export const MAX_PAYLOAD = 8 * 1024 * 1024;
 
 /** Authenticate before registering handlers, exposing sessions or capturing the screen. */
 export function authorized(request: IncomingMessage, token: string): boolean {
-  // Native clients do not send Origin. Reject websites, including localhost websites.
-  if (request.headers.origin !== undefined || token.length < 32) return false;
+  // Android adds Origin automatically; the app supplies an explicit native marker.
+  // This is not a credential: every accepted client must also present the token.
+  const origin = request.headers.origin;
+  if ((origin !== undefined && origin !== 'aircodum://native') || token.length < 32) return false;
   const header = request.headers.authorization;
   if (typeof header !== 'string' || !header.startsWith('Bearer ')) return false;
   const actual = Buffer.from(header.slice(7));

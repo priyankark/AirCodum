@@ -8,6 +8,7 @@ const native = { getScreenSize: () => ({ width: 1440, height: 900 }) };
 const createImage = async () => ({ width: 1440, height: 900, resize() {}, getBuffer: async () => Buffer.from('jpeg') });
 Module._load = function(name, ...args) {
   if (name === 'screenshot-desktop') return screenshot;
+  if (name === './native-capture') return { capturePrimaryScreen: screenshot, nativeResizeJpeg: async () => null };
   if (name === 'vscode') return {};
   if (name === './commanding/robotjs-handlers') return { typedRobot: native };
   if (name === './input-handler') return native;
