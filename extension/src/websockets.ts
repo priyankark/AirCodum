@@ -486,6 +486,9 @@ class VSCodeVNCConnection {
 export function handleWebSocketConnection(ws: WebSocket) {
   console.log("New WebSocket connection");
   addWebSocketConnection(ws);
+  ws.send(JSON.stringify({ type: 'server_capabilities', protocolVersion: 1,
+    features: { agents: [], pty: false, vnc: true, vncSharedPort: true,
+      vncStreamControl: true, vncTextInput: true } }));
 
   // Create a connection instance for this socket
   const vncConnection = new VSCodeVNCConnection(ws);

@@ -32,7 +32,13 @@ test('extension requires pairing, streams only on demand, rejects malformed text
     await new Promise(resolve => bad.on('error', resolve));
     assert.equal(captures, 0);
     client = new WebSocket(`ws://127.0.0.1:${port}`, { headers: { Authorization: 'Bearer ' + token } });
+    const hello = message(client);
     await once(client, 'open');
+    const capabilities = await hello;
+    assert.equal(capabilities.type, 'server_capabilities');
+    assert.equal(capabilities.features.vncSharedPort, true);
+    assert.equal(capabilities.features.pty, false);
+    assert.deepEqual(capabilities.features.agents, []);
     assert.equal(captures, 0);
     const rejected = message(client); client.send('{broken');
     assert.equal((await rejected).type, 'error'); assert.equal(uploads, 0);

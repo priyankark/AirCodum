@@ -1,6 +1,6 @@
 # Connecting the updated stack
 
-Update both the server and mobile app together. Old unauthenticated clients will be rejected. Keep pairing tokens private: they grant desktop and terminal control.
+The updated app detects supported server features automatically; see `COMPATIBILITY.md`. Old unauthenticated apps are still rejected by the authenticated servers. Keep pairing tokens private: they grant desktop and terminal control.
 
 ## Agentum
 
@@ -19,7 +19,7 @@ Agent execution now uses normal permission/sandbox behavior. A local operator wh
 1. Run `npm install` and `npm run compile` under `extension/`, then load the updated extension in a trusted VS Code workspace.
 2. Set the application-level `aircodum.bindAddress` setting to the desktop's Tailscale IP, or retain localhost behind a TLS reverse proxy.
 3. Run **Start AirCodum Server**, then **AirCodum: Copy Pairing Token** from the Command Palette.
-4. In mobile use port **11040**, and set the advanced **VNC port to 11040 too**. The extension serves both connections on the same listener. Agent session modes require Agentum, not the extension.
+4. In mobile use port **11040**, the app automatically uses the same port for VNC. The extension serves both connections on the same listener. Agent session modes require Agentum, not the extension.
 5. Paste the extension's token and select the matching transport. The extension and Agentum have different pairing credentials.
 
 Re-enter the OpenAI API key once in the extension's webview. It is now saved in VS Code SecretStorage; the extension no longer reads or writes workspace `.env` keys. Existing `.env` files are untouched. If a previous key was committed or exposed in logs, rotate it and remove it from the relevant history separately.

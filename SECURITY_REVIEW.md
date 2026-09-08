@@ -56,7 +56,7 @@ Allow a focused dependency migration and native build/test pass for these remain
 - Extension TypeScript check and esbuild/native-addon packaging pass.
 - Agentum TypeScript build passes.
 - Mobile TypeScript check passes, including fixes to pre-existing speech-event and notification type errors.
-- Eighteen targeted tests cover real upgrade rejection, payload limits, native input validation, both actual server integrations, on-demand streaming, malformed text, listener release, scheduler timing/recovery/cancellation, keyboard composition/repeat, transport validation, and newest-frame decoding.
+- Twenty-four targeted tests cover real upgrade rejection, payload limits, native input validation, both actual server integrations, on-demand streaming, malformed text, listener release, scheduler timing/recovery/cancellation, keyboard composition/repeat, transport validation, and newest-frame decoding.
 - Final iOS and Android JavaScript/Hermes bundle exports pass. These are separate from a native app build.
 - No physical-device test, store build, security penetration test, or deployment was performed.
 - The app intentionally has `newArchEnabled: false`; Reanimated stays on compatible major 3. Expo's generic version checker prefers major 4, which requires a separate new-architecture migration. This is an existing architecture constraint.
@@ -64,3 +64,5 @@ Allow a focused dependency migration and native build/test pass for these remain
 - Review remaining upload lifetime/disk quotas, image decompression limits, token rotation UX, session retention, and long-running output memory limits before an internet-facing production release. Paired devices retain full desktop/terminal authority by design.
 
 See `CONNECTION_SETUP.md` for the new pairing and transport requirements. Webview restrictions follow [VS Code's guidance](https://code.visualstudio.com/api/extension-guides/webview#security); current ws updates were checked against the [upstream advisories](https://github.com/websockets/ws/security/advisories).
+
+Automatic capability selection and the remaining authentication migration boundary are documented in [COMPATIBILITY.md](COMPATIBILITY.md).

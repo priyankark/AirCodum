@@ -11,7 +11,7 @@ The initial PRs had unit/integration tests and JavaScript exports, but no native
 - Confirmed pairing settings/token survive an app restart and can reconnect.
 - Observed server capture stop and socket close when switching away from VNC and when backgrounding Android. Foregrounding reconnects VNC.
 - A separate real desktop input probe passed Cmd+A, text, Backspace and Enter at event spacings of 50, 150 and 1,000 ms.
-- All 18 targeted automated tests pass: extension 6, CLI 7, mobile 5. TypeScript checks and extension packaging pass.
+- All 24 targeted automated tests pass: extension 6, CLI 7, mobile 11. TypeScript checks and extension packaging pass.
 
 ## Bugs found by native testing
 
@@ -34,3 +34,5 @@ The connected Android stream showed about 6–7 sent frames/second and roughly 1
 ## Reproduction and limitations
 
 See the [mobile native validation report](https://github.com/priyankark/AirCodum-Agnentum-Mobile/blob/codex/secure-vnc-keyboard/NATIVE_VALIDATION.md) for the Android script and complete limitations. The CLI provides `node tests/benchmark-native-capture.cjs` after `npm run build` to repeat the local capture comparison. iOS, physical devices, Windows/Linux, the full VS Code host and production-network latency remain unverified. The existing mobile dependency findings remain unresolved.
+
+Automatic compatibility changes and additional Android checks are described in [COMPATIBILITY.md](COMPATIBILITY.md).
