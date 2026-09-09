@@ -14,6 +14,8 @@ async function until(check, timeout = 15000) {
 }
 exports.run = async () => {
   const directory = process.env.AIRCODUM_VSCODE_E2E_DIR;
+  const transportOnly = process.env.AIRCODUM_E2E_TRANSPORT_ONLY === '1';
+  const mode = transportOnly ? 'transport' : 'desktop';
   assert.ok(directory, 'Set AIRCODUM_VSCODE_E2E_DIR to an isolated test directory');
   const write = (name, data) => fs.writeFileSync(path.join(directory, name), JSON.stringify(data), { mode: 0o600 });
   const extension = vscode.extensions.getExtension('priyankark.aircodum-app');
@@ -42,28 +44,40 @@ exports.run = async () => {
   fs.writeFileSync(filePath, 'fixture');
   const document = await vscode.workspace.openTextDocument(filePath);
   const focus = async () => {
+    if (process.platform === 'darwin') {
+      const { execFileSync } = require('node:child_process');
+      const line = execFileSync('ps', ['-Ao', 'pid,command'], { encoding: 'utf8' }).split('\n')
+        .find(line => line.includes('/Contents/MacOS/Code --new-window') && line.includes(`--user-data-dir ${directory}/profile`));
+      const pid = Number(line?.trim().split(/\s/)[0]);
+      assert.ok(Number.isInteger(pid) && pid > 0, 'Find only the isolated VS Code process');
+      execFileSync('osascript', ['-e', `tell application "System Events" to set frontmost of first application process whose unix id is ${pid} to true`]);
+    }
     await vscode.window.showTextDocument(document, { viewColumn: vscode.ViewColumn.One, preserveFocus: false });
     await vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup');
+    await until(() => vscode.window.state.focused);
+    await delay(300); // Allow the editor's DOM focus to settle before native/command input.
   };
-  await focus();
-  const editor = vscode.window.activeTextEditor;
-  socket.send('Select All');
-  await until(() => editor.document.getText(editor.selection) === 'fixture');
-  socket.send('Move Cursor to End');
-  await until(() => editor.selection.isEmpty);
-  socket.send(JSON.stringify({ type: 'vnc_start' }));
-  await until(() => messages.some(m => m.type === 'screen-update'));
-  const frame = messages.find(m => m.type === 'screen-update');
-  assert.ok(frame.dimensions.width > 0 && frame.dimensions.height > 0);
-  assert.equal(Buffer.from(frame.image, 'base64').subarray(0, 2).toString('hex'), 'ffd8');
-  socket.send(JSON.stringify({ type: 'vnc_stop' }));
+  if (!transportOnly) {
+    await focus();
+    const editor = vscode.window.activeTextEditor;
+    socket.send('Select All');
+    await until(() => editor.document.getText(editor.selection) === 'fixture');
+    socket.send('Move Cursor to End');
+    await until(() => editor.selection.isEmpty);
+    socket.send(JSON.stringify({ type: 'vnc_start' }));
+    await until(() => messages.some(m => m.type === 'screen-update'));
+    const frame = messages.find(m => m.type === 'screen-update');
+    assert.ok(frame.dimensions.width > 0 && frame.dimensions.height > 0);
+    assert.equal(Buffer.from(frame.image, 'base64').subarray(0, 2).toString('hex'), 'ffd8');
+    socket.send(JSON.stringify({ type: 'vnc_stop' }));
+  }
   socket.close();
   const snapshot = () => write('editor-state.json', { text: document.getText(), dirty: document.isDirty });
   const subscription = vscode.workspace.onDidChangeTextDocument(event => { if (event.document === document) snapshot(); });
   snapshot();
-  write('ready.json', { token, port: 11040, filePath, vscodeVersion: vscode.version,
+  write('ready.json', { mode, token, port: 11040, filePath, vscodeVersion: vscode.version,
     checks: ['real extension activated', 'real webview opened', 'SecretStorage pairing command', 'anonymous upgrade rejected',
-      'capabilities announced', 'capture only on demand', 'VS Code Select All/Move Cursor commands', 'native JPEG captured'] });
+      'capabilities announced', ...(!transportOnly ? ['capture only on demand', 'VS Code Select All/Move Cursor commands', 'native JPEG captured'] : [])] });
   let lastId;
   try {
     const deadline = Date.now() + 45 * 60 * 1000;
@@ -85,11 +99,11 @@ exports.run = async () => {
               await vscode.commands.executeCommand('extension.copyAirCodumPairingToken');
               assert.equal(await vscode.env.clipboard.readText(), token, 'Restart must retain the pairing token');
               await vscode.env.clipboard.writeText(before);
-              await focus();
+              if (!transportOnly) await focus();
             } else if (request.action === 'finish') {
               await document.save();
               write('response.json', { id: lastId, pass: true });
-              write('result.json', { pass: true, vscodeVersion: vscode.version, text: document.getText() });
+              write('result.json', { pass: true, mode, vscodeVersion: vscode.version, text: document.getText() });
               return;
             } else throw Error('Unknown test action');
             snapshot();

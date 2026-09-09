@@ -40,24 +40,21 @@ Counts are npm audit's affected package counts, including transitive parent pack
 | --- | --- | --- |
 | AirCodum extension | 30 (1 critical, 8 high, 21 moderate) | 0 |
 | Agentum CLI | Not recorded before updates | 0 |
-| Agentum mobile | 41 (2 critical, 21 high, 17 moderate, 1 low) | 13 (8 high, 5 moderate) |
-| Original AirCodum-Mobile | 73 (6 critical, 23 high, 37 moderate, 7 low) | 29 (1 critical, 12 high, 15 moderate, 1 low) |
+| Agentum mobile | 41 (2 critical, 21 high, 17 moderate, 1 low) | 8 high |
+| Original AirCodum-Mobile | 73 (6 critical, 23 high, 37 moderate, 7 low) | 9 high |
 
 Compatible updates were applied. Agentum uses Node's `randomUUID` instead of the vulnerable older UUID package. Mobile pins compatible patched PostCSS and UUID transitive versions. The mobile iOS/Android build-number edits and unrelated presentation file predated this work and are preserved.
 
-**Remaining Agentum mobile findings:**
+**September 8 dependency follow-up:** Both mobile apps use upstream URI decoder 0.5.0 with a minimal CommonJS adapter, and local image-size bounds checks for malformed ICNS/JXL/HEIF assets. The original app also upgrades tar, fast-xml-parser and send. Its Expo CLI imports are patched for tar 7, and turbo-stream v2 retains its wire format with per-encoder work/string/depth limits. These are explicit local patches and a resource-limit mitigation, not hidden package substitutions or a claim that audit is clean.
 
-1. `image-size` accounts for eight high findings through Metro/Expo parent packages. The installed parser is used by build tooling for image assets. The registry's latest release is 2.0.2, which remains affected by ICNS/JXL/HEIF infinite-loop advisories. Remediation needs an upstream fix or a reviewed parser replacement/backport in Metro/Expo, with malformed-image regression fixtures. An Expo major bump alone is not evidence this is fixed. Avoid feeding untrusted images to the build pipeline pending that work. See [ICNS advisory](https://github.com/advisories/GHSA-w3rx-r6r6-pgpr) and [JXL/HEIF advisory](https://github.com/advisories/GHSA-5p2g-fcmc-qvqq).
-2. `decode-uri-component` accounts for five moderate findings through query-string/navigation/router. Version 0.5.0 fixes malformed-percent-input CPU exhaustion, but changes the module to ESM; the existing query-string consumer uses CommonJS. Complete remediation requires a compatible query-string/navigation migration or a reviewed CommonJS backport, plus malformed deep-link and routing tests on device. A blind override would change the function shape consumed by that code. See the [upstream advisory](https://github.com/advisories/GHSA-vcc3-ghjq-m6fr).
-
-Allow a focused dependency migration and native build/test pass for these remaining items. The exact effort depends on whether upstream patches become available. No blanket `npm audit fix --force` or whole Expo major migration was applied.
+The remaining raw high alerts cover locally patched image-size and parents (both apps), plus mitigated turbo-stream (original app). No critical, moderate or low findings remain in either mobile lockfile. Review the committed patches alongside [original mobile dependency evidence](https://github.com/priyankark/AirCodum-Mobile/blob/codex/secure-vnc-keyboard/DEPENDENCY_SECURITY.md) and [Agentum mobile dependency evidence](https://github.com/priyankark/AirCodum-Agnentum-Mobile/blob/codex/secure-vnc-keyboard/DEPENDENCY_SECURITY.md). Regression tests cover malicious parser inputs with external timeouts, valid formats, actual consumers, encoder limits in both module formats and patch installation from pristine packages. No blanket `npm audit fix --force` or Expo major migration was applied.
 
 ## Validation and remaining release work
 
 - Extension TypeScript check and esbuild/native-addon packaging pass.
 - Agentum TypeScript build passes.
 - Mobile TypeScript check passes, including fixes to pre-existing speech-event and notification type errors.
-- Twenty-four targeted tests cover real upgrade rejection, payload limits, native input validation, both actual server integrations, on-demand streaming, malformed text, listener release, scheduler timing/recovery/cancellation, keyboard composition/repeat, transport validation, and newest-frame decoding.
+- Targeted tests (6 extension, 7 CLI, 16 original mobile and 13 Agentum mobile) cover real upgrade rejection, payload limits, native input validation, both actual server integrations, on-demand streaming, malformed text, listener release, scheduler timing/recovery/cancellation, keyboard composition/repeat, transport validation, and newest-frame decoding.
 - Final iOS and Android JavaScript/Hermes bundle exports pass. These are separate from a native app build.
 - No physical-device test, store build, security penetration test, or deployment was performed.
 - The app intentionally has `newArchEnabled: false`; Reanimated stays on compatible major 3. Expo's generic version checker prefers major 4, which requires a separate new-architecture migration. This is an existing architecture constraint.
@@ -70,4 +67,4 @@ Automatic capability selection and the remaining authentication migration bounda
 
 ## Original VS Code mobile app
 
-The primary companion is [AirCodum-Mobile](https://github.com/priyankark/AirCodum-Mobile), package `com.codeair`; Agentum is a separate app. The original app retains its command/file interface and receives the pairing, capability, keyboard and frame changes. Its Expo 51 stack has additional unresolved dependency findings, including tar in development tooling. A tar 7 override broke Expo CLI prebuild and was reverted. Compatible PostCSS, UUID and xmldom patches pass prebuild; see the original mobile PR validation report for exact evidence and remaining scope.
+The primary companion is [AirCodum-Mobile](https://github.com/priyankark/AirCodum-Mobile), package `com.codeair`; Agentum is a separate app. The original app retains its command/file interface and receives the pairing, capability, keyboard and frame changes. Its Expo 51 stack now uses patched tar 7 with an explicit Expo CLI compatibility patch; prebuild and the actual JavaScript extraction fallback pass. See the original mobile validation and dependency reports for native evidence, local mitigations and remaining scope.
