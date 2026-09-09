@@ -43,6 +43,20 @@ exports.run = async () => {
   const filePath = path.join(directory, 'workspace', 'native-editor.txt');
   fs.writeFileSync(filePath, 'fixture');
   const document = await vscode.workspace.openTextDocument(filePath);
+  let focusGuard;
+  const holdFocus = pid => {
+    clearInterval(focusGuard);
+    const duration = Math.min(10000, Math.max(0, Number(process.env.AIRCODUM_E2E_FOCUS_HOLD_MS) || 0));
+    if (!duration) return;
+    const deadline = Date.now() + duration;
+    let pending = false;
+    focusGuard = setInterval(() => {
+      if (Date.now() >= deadline) { clearInterval(focusGuard); return; }
+      if (pending || vscode.window.state.focused) return;
+      pending = true;
+      require('node:child_process').execFile('osascript', ['-e', `tell application "System Events" to set frontmost of first application process whose unix id is ${pid} to true`], () => { pending = false; });
+    }, 100);
+  };
   const focus = async () => {
     if (process.platform === 'darwin') {
       const { execFileSync } = require('node:child_process');
@@ -51,6 +65,7 @@ exports.run = async () => {
       const pid = Number(line?.trim().split(/\s/)[0]);
       assert.ok(Number.isInteger(pid) && pid > 0, 'Find only the isolated VS Code process');
       execFileSync('osascript', ['-e', `tell application "System Events" to set frontmost of first application process whose unix id is ${pid} to true`]);
+      holdFocus(pid);
     }
     await vscode.window.showTextDocument(document, { viewColumn: vscode.ViewColumn.One, preserveFocus: false });
     await vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup');
@@ -115,6 +130,7 @@ exports.run = async () => {
     }
     throw Error('Android test did not finish within 45 minutes');
   } finally {
+    clearInterval(focusGuard);
     subscription.dispose();
     await vscode.commands.executeCommand('extension.stopAirCodumServer');
   }
