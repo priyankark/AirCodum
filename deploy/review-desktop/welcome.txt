@@ -1,0 +1,18 @@
+AirCodum review desktop
+
+This is a disposable Linux desktop running the published AirCodum VS Code
+extension. It contains sample files only. Do not enter personal credentials.
+
+Try these features from your phone:
+1. Commands: Select All, Move Cursor to End, Save File.
+2. VNC: view the desktop and move/click the pointer.
+3. Keyboard: edit a local draft, then Send; Enter presses a separate key.
+4. Transfer a sample text file or image from your phone.
+5. Background and reopen the phone app, then reconnect.
+
+Linux shortcuts use Ctrl, rather than the macOS Cmd modifier.
+Camera and microphone permissions are optional for keyboard/VNC use.
+AI/OCR require a separately configured provider key; none is stored here.
+
+To restore this sample, open VS Code's command palette and run:
+AirCodum Review: Reset Sample
