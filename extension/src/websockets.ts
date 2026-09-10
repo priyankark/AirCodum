@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
-import * as WebSocket from "ws";
+import WebSocket from "ws";
 import { typedRobot as robot } from "./commanding/robotjs-handlers";
-import screenshot from "screenshot-desktop";
+import { capturePrimaryScreen, nativeResizeJpeg } from './native-capture';
 import { handleCommand } from "./commanding/command-handler";
 import { chatWithOpenAI } from "./ai/api";
 import { handleFileUpload } from "./files/utils";
@@ -11,6 +11,8 @@ import {
   removeWebSocketConnection,
 } from "./state/actions";
 import crypto from "crypto";
+import { messageBudget, validKey, validMouse } from "./security";
+import { getApiKey } from "./ai/utils";
 
 import { Commands } from "./commanding/commands";
 import jimp from "./jimp";
@@ -26,7 +28,7 @@ interface VNCQualitySettings {
  * Manages screen capture for all connected clients.
  * Features frame coalescing and adaptive quality settings.
  */
-class ScreenCaptureManager {
+export class ScreenCaptureManager {
   private static instance: ScreenCaptureManager;
   private isCapturing = false;
   private captureInterval: NodeJS.Timeout | null = null;
@@ -35,19 +37,14 @@ class ScreenCaptureManager {
   private quality: VNCQualitySettings = {
     width: 1440,        // Default width for good quality
     jpegQuality: 85,    // Start with good quality
-    fps: 45,           // Target FPS
+    fps: 30,           // Target FPS
   };
 
   // Frame management
-  private processingFrame = false;
   private lastFrameHash: string | null = null;
-  private lastFrameSentTime = 0;
   private lastFrameSize = 0;
 
-  // Frame coalescing
-  private pendingFrames: Buffer[] = [];
-  private coalesceTimer: NodeJS.Timeout | null = null;
-  private readonly COALESCE_MAX_WAIT = 100; // ms
+  // Capture cadence
   private readonly MIN_FRAME_INTERVAL = 33;  // ~30fps cap
 
   // Performance tracking
@@ -57,7 +54,7 @@ class ScreenCaptureManager {
   private framesSent = 0;
 
   // Quality control
-  private readonly MIN_QUALITY = 80;
+  private readonly MIN_QUALITY = 55;
   private readonly MAX_QUALITY = 90;
   private readonly MIN_WIDTH = 1024;
   private readonly MAX_WIDTH = 1920;
@@ -79,7 +76,7 @@ class ScreenCaptureManager {
   }
 
   private setupPerformanceMonitoring() {
-    setInterval(() => {
+    const monitor = setInterval(() => {
       if (!this.isCapturing) return;
 
       const dropRate = (this.droppedFrames / (this.droppedFrames + this.framesSent)) * 100;
@@ -95,12 +92,14 @@ class ScreenCaptureManager {
       this.droppedFrames = 0;
       this.framesSent = 0;
     }, 1000);
+    monitor.unref();
   }
 
   public subscribe(
     callback: (frame: Buffer, dimensions: { width: number; height: number }) => void
   ): () => void {
     this.subscribers.push(callback);
+    this.lastFrameHash = null;
     if (!this.isCapturing) {
       this.startCaptureLoop();
     }
@@ -112,122 +111,65 @@ class ScreenCaptureManager {
     };
   }
 
+  private generation = 0;
+  private inFlight = false;
+  private lastRefresh = 0;
+
   private startCaptureLoop() {
     if (this.isCapturing) return;
     this.isCapturing = true;
-
+    const generation = ++this.generation;
+    const active = () => this.isCapturing && generation === this.generation;
     const captureFrame = async () => {
-      if (!this.isCapturing) return;
-
-      const now = performance.now();
-      const timeSinceLastFrame = now - this.lastFrameSentTime;
-
-      // Skip frame if we're processing or it's too soon
-      if (this.processingFrame || timeSinceLastFrame < this.MIN_FRAME_INTERVAL) {
-        this.droppedFrames++;
-        return;
-      }
-
+      if (!active()) return;
+      if (this.inFlight) { this.captureInterval = setTimeout(captureFrame, 16); return; }
+      this.inFlight = true;
+      const started = performance.now();
       try {
-        const raw = await screenshot();
-        await this.handleNewFrame(raw);
-      } catch (error) {
-        console.error("Capture error:", error);
+        const raw = await capturePrimaryScreen();
+        if (!active()) return;
+        const hash = crypto.createHash('sha256').update(raw).digest('hex');
+        // Periodic refresh allows a slow/new subscriber to recover on an idle desktop.
+        if (hash !== this.lastFrameHash || Date.now() - this.lastRefresh >= 1000) {
+          const dimensions = { ...this.cachedDimensions };
+          const frame = await this.processFrame(raw, dimensions);
+          if (!active()) return;
+          this.lastFrameHash = hash;
+          this.lastRefresh = Date.now();
+          this.lastFrameSize = frame.length;
+          this.framesSent++;
+          this.updatePerformanceMetrics(performance.now() - started);
+          for (const subscriber of this.subscribers) {
+            try { subscriber(frame, dimensions); } catch { /* A closed client cannot stop capture. */ }
+          }
+          this.adjustQualityIfNeeded();
+        }
+      } catch { console.error('Screen capture failed; retrying.'); }
+      finally {
+        this.inFlight = false;
+        if (active()) this.captureInterval = setTimeout(captureFrame,
+          Math.max(1, 1000 / this.quality.fps - (performance.now() - started)));
       }
-
-      // Schedule next capture with dynamic interval
-      const nextInterval = Math.max(
-        this.MIN_FRAME_INTERVAL,
-        1000 / this.quality.fps
-      );
-      setTimeout(captureFrame, nextInterval);
     };
-
-    captureFrame();
+    void captureFrame();
   }
 
-  private calculateFrameHash(buffer: Buffer): string {
-    // Sample 32 points across the frame for quick comparison
-    const samples = new Uint8Array(32);
-    const step = Math.floor(buffer.length / 32);
-    const offset = Math.floor(step / 2);
+  private async processFrame(frame: Buffer, dimensions: { width: number; height: number }): Promise<Buffer> {
+    const nativeFrame = await nativeResizeJpeg(frame, dimensions, this.quality.jpegQuality);
+    if (nativeFrame) return nativeFrame;
 
-    for (let i = 0; i < 32; i++) {
-      samples[i] = buffer[offset + i * step];
-    }
-
-    return crypto.createHash("md5").update(samples).digest("hex");
-  }
-
-  private async handleNewFrame(frame: Buffer) {
-    const frameHash = this.calculateFrameHash(frame);
-    if (frameHash === this.lastFrameHash) {
-      this.droppedFrames++;
-      return;
-    }
-
-    this.lastFrameHash = frameHash;
-    this.pendingFrames.push(frame);
-
-    // Start coalescing timer if not already running
-    if (!this.coalesceTimer) {
-      this.coalesceTimer = setTimeout(() => {
-        this.processCoalescedFrames();
-      }, this.COALESCE_MAX_WAIT);
-    }
-  }
-
-  private async processCoalescedFrames() {
-    if (this.pendingFrames.length === 0 || this.processingFrame) return;
-
-    this.processingFrame = true;
-    this.coalesceTimer = null;
-
-    // Process most recent frame
-    const frame = this.pendingFrames[this.pendingFrames.length - 1];
-    this.pendingFrames = [];
-
-    try {
-      const startTime = performance.now();
-      const processedFrame = await this.processFrame(frame);
-      const processingTime = performance.now() - startTime;
-
-      this.updatePerformanceMetrics(processingTime);
-      this.adjustQualityIfNeeded();
-
-      this.framesSent++;
-      this.lastFrameSentTime = performance.now();
-      this.lastFrameSize = processedFrame.length;
-
-      // Notify subscribers
-      this.subscribers.forEach((cb) => cb(processedFrame, this.cachedDimensions));
-    } catch (error) {
-      console.error("Frame processing error:", error);
-    } finally {
-      this.processingFrame = false;
-
-      // Process any frames that arrived during processing
-      if (this.pendingFrames.length > 0) {
-        this.coalesceTimer = setTimeout(() => {
-          this.processCoalescedFrames();
-        }, Math.min(this.COALESCE_MAX_WAIT, this.MIN_FRAME_INTERVAL));
-      }
-    }
-  }
-
-  private async processFrame(frame: Buffer): Promise<Buffer> {
     const image = await jimp.createImage(frame);
 
     // Resize if needed
-    if (image.width !== this.cachedDimensions.width || 
-        image.height !== this.cachedDimensions.height) {
+    if (image.width !== dimensions.width ||
+        image.height !== dimensions.height) {
       const resizeMode = this.isProcessingSlow()
         ? ResizeStrategy.NEAREST_NEIGHBOR  // Faster but lower quality
         : ResizeStrategy.BILINEAR;         // Better quality
 
       image.resize({
-        w: this.cachedDimensions.width,
-        h: this.cachedDimensions.height,
+        w: dimensions.width,
+        h: dimensions.height,
         mode: resizeMode,
       });
     }
@@ -290,7 +232,7 @@ class ScreenCaptureManager {
         this.quality.width - 128
       );
       this.cachedDimensions = this.getScaledDimensions();
-    } 
+    }
     else if (dropRate < 0.05 && avgProcessingTime < this.MIN_FRAME_INTERVAL * 0.5) {
       // Gradually improve quality when performance is good
       this.quality.jpegQuality = Math.min(
@@ -308,7 +250,7 @@ class ScreenCaptureManager {
   }
 
   private getScaledDimensions() {
-    const { width } = this.quality;
+    const width = Math.min(this.quality.width, this.screenSize.width);
     const { width: realWidth, height: realHeight } = this.screenSize;
     const height = Math.floor(width * (realHeight / realWidth));
     return { width, height };
@@ -317,32 +259,33 @@ class ScreenCaptureManager {
   public updateQualitySettings(quality: Partial<VNCQualitySettings>) {
     let changed = false;
 
-    if (quality.width !== undefined && 
-        quality.width >= this.MIN_WIDTH && 
-        quality.width <= this.MAX_WIDTH && 
+    if (Number.isFinite(quality.width) && quality.width !== undefined &&
+        quality.width >= this.MIN_WIDTH &&
+        quality.width <= this.MAX_WIDTH &&
         quality.width !== this.quality.width) {
       this.quality.width = quality.width;
       this.cachedDimensions = this.getScaledDimensions();
       changed = true;
     }
 
-    if (quality.jpegQuality !== undefined && 
-        quality.jpegQuality >= this.MIN_QUALITY && 
-        quality.jpegQuality <= this.MAX_QUALITY && 
+    if (Number.isFinite(quality.jpegQuality) && quality.jpegQuality !== undefined &&
+        quality.jpegQuality >= this.MIN_QUALITY &&
+        quality.jpegQuality <= this.MAX_QUALITY &&
         quality.jpegQuality !== this.quality.jpegQuality) {
       this.quality.jpegQuality = quality.jpegQuality;
       changed = true;
     }
 
-    if (quality.fps !== undefined && 
-        quality.fps >= 1 && 
-        quality.fps <= 60 && 
+    if (Number.isFinite(quality.fps) && quality.fps !== undefined &&
+        quality.fps >= 1 &&
+        quality.fps <= 60 &&
         quality.fps !== this.quality.fps) {
       this.quality.fps = quality.fps;
       changed = true;
     }
 
     if (changed) {
+        this.lastFrameHash = null;
       this.resetPerformanceMetrics();
     }
   }
@@ -355,17 +298,13 @@ class ScreenCaptureManager {
   }
 
   private stopCaptureLoop() {
+    this.generation++;
     if (this.captureInterval) {
-      clearInterval(this.captureInterval);
+      clearTimeout(this.captureInterval);
       this.captureInterval = null;
-    }
-    if (this.coalesceTimer) {
-      clearTimeout(this.coalesceTimer);
-      this.coalesceTimer = null;
     }
     this.isCapturing = false;
     this.lastFrameHash = null;
-    this.pendingFrames = [];
     this.resetPerformanceMetrics();
   }
 
@@ -383,92 +322,65 @@ class ScreenCaptureManager {
 class VSCodeVNCConnection {
   private unsubscribe: (() => void) | null = null;
   private screenSize = robot.getScreenSize();
+  private mouseDown = false;
 
   constructor(private ws: WebSocket) {
     this.setupWebSocketHandlers();
-    this.subscribeToFrameUpdates();
   }
 
   private setupWebSocketHandlers() {
-    this.ws.on("message", async (message: WebSocket.Data) => {
-      if (message instanceof Buffer) {
-        await this.handleBufferMessage(message);
-      } else if (typeof message === "string") {
-        await this.handleStringMessage(message);
-      }
-    });
-
-    this.ws.on("close", () => {
-      this.dispose();
-    });
-  }
-
-  private async handleBufferMessage(message: Buffer) {
-    const messageData = message.toString();
-    try {
-      const parsedMessage = JSON.parse(messageData);
-      switch (parsedMessage.type) {
-        case "mouse-event":
-          await this.handleMouseEvent(parsedMessage);
-          break;
-        case "keyboard-event":
-          await this.handleKeyboardEvent(parsedMessage);
-          break;
-        case "quality-update":
-          ScreenCaptureManager.getInstance().updateQualitySettings(
-            parsedMessage
-          );
-          break;
-        default:
-          if (this.isSupportedCommand(messageData)) {
-            await handleCommand(messageData as never, this.ws);
-          } else {
-            await handleFileUpload(message, this.ws);
+    const budget = messageBudget();
+    let queued = 0;
+    let chain = Promise.resolve();
+    this.ws.on("message", (message: WebSocket.RawData, isBinary: boolean) => {
+      const buffer = Buffer.isBuffer(message) ? message : Buffer.from(message as ArrayBuffer);
+      if (!budget(buffer.length) || queued >= 32) { this.ws.close(1008, "Message limit exceeded"); return; }
+      queued++;
+      chain = chain.then(async () => {
+        if (this.ws.readyState !== WebSocket.OPEN) return;
+        if (isBinary) { await handleFileUpload(buffer, this.ws); return; }
+        if (buffer.length > 65536) throw new Error("Text message too large");
+        const text = buffer.toString('utf8');
+        if (!text.trim().startsWith('{')) {
+          if (this.isSupportedCommand(text)) await handleCommand(text as never, this.ws);
+          else if (text.length <= 4096 && getApiKey()) {
+            const response = await chatWithOpenAI(text, getApiKey()!);
+            store.getState().webview.panel?.webview.postMessage({ type: 'chatResponse', response });
           }
-      }
-    } catch (error) {
-      // If not JSON or parse error, treat as command or file
-      if (this.isSupportedCommand(messageData)) {
-        await handleCommand(messageData as never, this.ws);
-      } else {
-        await handleFileUpload(message, this.ws);
-      }
-    }
-  }
-
-  private async handleStringMessage(message: string) {
-    try {
-      const parsedMessage = JSON.parse(message);
-      if (parsedMessage.type === "quality-update") {
-        ScreenCaptureManager.getInstance().updateQualitySettings(parsedMessage);
-        return;
-      }
-      // If not recognized JSON, treat it as text for AI chat
-      throw new Error("Not recognized JSON");
-    } catch {
-      // Chat with OpenAI fallback
-      try {
-        const response = await chatWithOpenAI(
-          message,
-          store.getState().apiKey || ""
-        );
-        store.getState().webview.panel?.webview.postMessage({
-          type: "chatResponse",
-          response,
-        });
-      } catch (error: any) {
-        store.getState().webview.panel?.webview.postMessage({
-          type: "error",
-          message: "Error chatting with AI",
-        });
-      }
-    }
+          return;
+        }
+        const data = JSON.parse(text);
+        switch (data.type) {
+          case 'vnc_start': this.subscribeToFrameUpdates(); break;
+          case 'vnc_stop': this.dispose(); break;
+          case 'mouse-event': case 'vnc_mouse_event':
+            if (!validMouse(data)) throw new Error('Invalid mouse event');
+            await this.handleMouseEvent(data); break;
+          case 'keyboard-event': case 'vnc_keyboard_event':
+            if (!validKey(data)) throw new Error('Invalid key event');
+            await this.handleKeyboardEvent(data); break;
+          case 'vnc_type':
+            if (typeof data.text !== 'string' || data.text.length > 4096) throw new Error('Invalid text');
+            robot.typeString(data.text); break;
+          case 'quality-update': case 'vnc_quality_update':
+            ScreenCaptureManager.getInstance().updateQualitySettings(data); break;
+          case 'list_sessions': case 'claude_list_sessions': break;
+          default: throw new Error('Unsupported message');
+        }
+      }).catch(() => {
+        if (this.ws.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify({ type: 'error', message: 'Invalid request' }));
+      }).finally(() => { queued--; });
+    });
+    this.ws.on('error', () => this.dispose());
+    this.ws.on('close', () => this.dispose());
   }
 
   private subscribeToFrameUpdates() {
+    if (this.unsubscribe) return;
     const manager = ScreenCaptureManager.getInstance();
     // Subscribe to frames as they arrive
     this.unsubscribe = manager.subscribe((frame, dimensions) => {
+      if (this.ws.readyState !== WebSocket.OPEN || this.ws.bufferedAmount > 0) return;
       // Convert to Base64
       const base64Image = frame.toString("base64");
 
@@ -483,6 +395,7 @@ class VSCodeVNCConnection {
           type: "screen-update",
           image: base64Image,
           dimensions,
+          timestamp: Date.now(),
         })
       );
     });
@@ -508,9 +421,11 @@ class VSCodeVNCConnection {
       switch (eventType) {
         case "down":
           robot.mouseToggle("down", "left");
+          this.mouseDown = true;
           break;
         case "up":
           robot.mouseToggle("up", "left");
+          this.mouseDown = false;
           break;
         case "move":
           // Already moved above
@@ -524,10 +439,13 @@ class VSCodeVNCConnection {
   private async handleKeyboardEvent(data: any) {
     try {
       const { key, modifier } = data;
+      const nativeKey = key === 'return' ? 'enter' : key;
       if (modifier) {
-        robot.keyTap(key, modifier);
+        const modifiers = Array.isArray(modifier) ? modifier : [modifier];
+        try { robot.keyTap(nativeKey, modifiers); }
+        finally { for (const modifier of modifiers) robot.keyToggle(modifier, 'up'); }
       } else {
-        robot.keyTap(key);
+        robot.keyTap(nativeKey);
       }
     } catch (error) {
       console.error("Error handling keyboard event:", error);
@@ -552,6 +470,10 @@ class VSCodeVNCConnection {
   }
 
   public dispose() {
+    if (this.mouseDown) {
+      try { robot.mouseToggle("up", "left"); } catch {}
+      this.mouseDown = false;
+    }
     // Unsubscribe from frame updates
     if (this.unsubscribe) {
       this.unsubscribe();
@@ -564,6 +486,9 @@ class VSCodeVNCConnection {
 export function handleWebSocketConnection(ws: WebSocket) {
   console.log("New WebSocket connection");
   addWebSocketConnection(ws);
+  ws.send(JSON.stringify({ type: 'server_capabilities', protocolVersion: 1,
+    features: { agents: [], pty: false, vnc: true, vncSharedPort: true,
+      vncStreamControl: true, vncTextInput: true } }));
 
   // Create a connection instance for this socket
   const vncConnection = new VSCodeVNCConnection(ws);

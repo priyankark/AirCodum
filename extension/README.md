@@ -45,19 +45,19 @@ Check out this demo to understand how to use AirCodum: [AirCodum YouTube Demo](h
 4. In the AirCodum interface, enter your API key in the "OpenAI API Key" field
 5. Click "Save Key"
 
-### Customizing the Port (Optional)
+### Pairing and transport
 
-1. Go to File > Preferences > Settings (Ctrl+, or Cmd+,)
-2. Search for "AirCodum"
-3. Find the "Port" setting and change it to your desired port number
-4. The default port is 11040
+This release requires a pairing-capable build of the original **AirCodum app (`com.codeair`)**. Agentum is a separate product. Install the updated mobile app before switching to this extension release. Old mobile builds can continue using the previous extension; they cannot authenticate to this secured listener.
+
+The listener uses port **11040** for commands, files and VNC. It defaults to localhost. For remote use, set the application-level `aircodum.bindAddress` setting to your desktop's Tailscale IP, or leave localhost behind a TLS reverse proxy. Public/wildcard/ordinary LAN binds are rejected.
 
 ## Getting Started
 
-1. Open the Command Palette (Ctrl+Shift+P or Cmd+Shift+P)
-2. Type "AirCodum: Start AirCodum Server" and select it
-3. AirCodum will display an IP address and port
-4. Use any WebSocket client on your other devices to connect to this address
+1. Open a trusted VS Code workspace and run **Start AirCodum Server** from the Command Palette.
+2. Run **AirCodum: Copy Pairing Token** and paste the token into the mobile app's connection settings. Keep it private: it authorizes desktop control.
+3. Enter the desktop's Tailscale IP and port 11040, selecting **Tailscale / localhost (ws)**. Both devices must use your actual Tailscale network. For a TLS proxy, use its hostname/port and enable TLS with a trusted certificate.
+4. Connect. The app selects supported features automatically; no rollout flags are needed.
+5. Open VNC to stream the desktop. Compose text locally, then press **Send** to insert it. **Enter** is a separate remote key. On macOS, grant screen-recording and accessibility permissions to the VS Code host.
 
 ## Features
 
@@ -141,16 +141,8 @@ Tailscale enables secure remote access to your AirCodum server from anywhere:
    - Sign in on both devices
    - They will automatically connect to your Tailscale network
 
-3. Configure AirCodum with Tailscale:
-   ```bash
-   tailscale serve 11040  # Or your configured AirCodum port
-   ```
-
-4. Connect from your mobile device:
-   - Use your computer's Tailscale IP or MagicDNS hostname
-   - Example: `your-computer.tail-scale.ts.net:11040`
-
-**Security Note**: While Tailscale provides secure connectivity, only use remote access over trusted networks for optimal security.
+3. Set `aircodum.bindAddress` to your desktop's Tailscale IP and restart the AirCodum server.
+4. Enter that IP, port 11040 and the pairing token in the app, then select **Tailscale / localhost (ws)**. Plaintext hostnames are not accepted; use the actual Tailscale IP or TLS.
 
 ## Command Reference
 
@@ -178,18 +170,16 @@ VS Code Commands (examples):
 
 ## Security Considerations
 
-- The AirCodum server operates on your local network. Use caution when using it on public networks.
-- Ideally avoid using this system over untrusted public networks (say Airport WiFi)
-- Your OpenAI API key is stored locally. Never share this key or commit it to version control.
-- Be mindful when executing commands from external devices, as they have control over your VS Code instance.
-- Regularly update AirCodum and VS Code to ensure you have the latest security patches.
-- Review files received through AirCodum before opening or executing them.
-- Note: The system doesn't yet support WSS (WebSockets over HTTPS).
+- Pairing is required before commands, uploads or native input are accepted. Tokens and OpenAI keys are stored in VS Code SecretStorage.
+- Use an actual Tailscale connection or a TLS proxy. A pairing token authenticates a device; it does not encrypt plain WebSocket traffic by itself.
+- Paired devices can control your desktop. Review received files before opening or executing them.
+- VNC capture runs only for subscribers, with bounded messages and newest-frame backpressure. Leaving VNC stops that subscription.
+- API keys previously placed in workspace `.env` files are no longer read. Re-enter the key in the webview. Existing files are untouched.
 
 ## Troubleshooting
 
-- **Can't start the server**: Make sure no other application is using the same port. Try changing the port in settings.
-- **Can't connect from other devices**: Ensure all devices are on the same network. Check if any firewall is blocking the connection.
+- **Can't start the server**: Make sure no other application is using the same port. Stop the other listener using port 11040 before starting AirCodum.
+- **Can't connect from other devices**: Check the pairing token, Tailscale/TLS transport, bind address and firewall.
 - **AI features not working**: Verify that you've entered a valid OpenAI API key in the settings.
 - **File transfer issues**: Check if your WebSocket client is correctly configured to connect to the AirCodum server address.
 - **Extension not loading**: Try uninstalling and reinstalling the extension. Ensure your VS Code is up to date.

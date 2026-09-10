@@ -1,0 +1,19 @@
+# Connecting AirCodum to VS Code
+
+Use [AirCodum-Mobile](https://github.com/priyankark/AirCodum-Mobile), package `com.codeair`, with this extension. [AirCodum-Agnentum-Mobile](https://github.com/priyankark/AirCodum-Agnentum-Mobile) is the separate app for Agentum CLI.
+
+1. Install dependencies and run `npm run compile` under `extension/`, then load the extension in a trusted VS Code workspace.
+2. Set application-level `aircodum.bindAddress` to the desktop's actual Tailscale IP, or keep localhost behind a TLS reverse proxy. Servers reject wildcard/public/ordinary LAN binds. An address in the Tailscale range alone does not create encryption.
+3. Run **Start AirCodum Server**, then **AirCodum: Copy Pairing Token** in the Command Palette.
+4. In the original mobile app, enter the host, port **11040**, and pairing token. Select TLS for a certificate-validated HTTPS proxy, or **Tailscale / localhost (ws)** for the protected direct connection. A TLS proxy must forward WebSocket upgrades and Authorization headers.
+5. Open VNC. Commands, uploads, frames and input share one socket. Supported features are detected automatically; see [COMPATIBILITY.md](COMPATIBILITY.md).
+
+Tokens grant desktop control and are stored in VS Code SecretStorage and the app's native SecureStore. Restarting the extension preserves its token. Re-enter the OpenAI API key once in the extension webview; it is also stored in SecretStorage. Existing workspace `.env` files remain untouched.
+
+Rebuild the mobile native binary to include SecureStore. Expo exports or Metro reloads alone cannot add a native module. Run Expo prebuild for Android or install iOS pods using the app's existing native build workflow.
+
+Send inserts the local text draft; Enter presses a separate desktop key. Leaving VNC or backgrounding the app stops capture when supported by the server. Old extensions retain their legacy automatic capture behavior.
+
+Validation commands: `npm run compile` and `npm run test:security` in the extension; `npx tsc --noEmit` and `npm run test:security` in the original mobile repo. See [NATIVE_VALIDATION.md](NATIVE_VALIDATION.md) for real VS Code and Android testing.
+
+The separate Agentum stack uses ports 11042/11043 and its own pairing credential. Its setup belongs to the [Agentum CLI PR](https://github.com/priyankark/agentum-cli/pull/3).

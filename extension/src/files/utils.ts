@@ -1,11 +1,12 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
+import { randomUUID } from "crypto";
 import { isText } from "istextorbinary";
 import { store } from "../state/store";
 import { resizeImage } from "../utils";
 import { getApiKey } from "../ai/utils";
-import WebSocket = require("ws");
+import WebSocket from "ws";
 import { transcribeImage } from "../ai/api";
 
 /**
@@ -26,21 +27,23 @@ export async function saveFile(fileBuffer: Buffer): Promise<{
     throw new Error("No workspace folder open");
   }
 
+  if (fileBuffer.length > 8 * 1024 * 1024) throw new Error("File too large");
   const codeDropFolder = path.join(workspaceFolder.uri.fsPath, "AirCodum");
   if (!fs.existsSync(codeDropFolder)) {
     fs.mkdirSync(codeDropFolder);
   }
 
+  if (fs.lstatSync(codeDropFolder).isSymbolicLink()) throw new Error("Upload folder cannot be a symbolic link");
   const fileType: MessageType = determineFileType(fileBuffer);
   const fileExtension = getFileExtension(fileBuffer, fileType);
-  const fileName = `file_${Date.now()}${fileExtension}`;
+  const fileName = `file_${randomUUID()}${fileExtension}`;
   const filePath = path.join(codeDropFolder, fileName);
 
   try {
     if (!fs.existsSync(codeDropFolder)) {
       fs.mkdirSync(codeDropFolder);
     }
-    fs.writeFileSync(filePath, fileBuffer);
+    fs.writeFileSync(filePath, fileBuffer, { flag: "wx", mode: 0o600 });
   } catch (error) {
     console.error("File operation error:", error);
     throw new Error("Failed to save the file");

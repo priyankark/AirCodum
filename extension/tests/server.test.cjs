@@ -1,0 +1,71 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const { once } = require('node:events');
+const Module = require('node:module');
+const { WebSocket } = require('ws');
+let captures = 0, uploads = 0, taps = [], typed = [], modifiers = [];
+const native = { getScreenSize: () => ({ width: 1440, height: 900 }), keyTap: (key, held = []) => { taps.push(key); modifiers = held; }, keyToggle: key => { modifiers = modifiers.filter(m => m !== key); }, moveMouse() {}, mouseToggle() {}, typeString(text) { if (!modifiers.length) typed.push(text); } };
+const originalLoad = Module._load;
+Module._load = function(name, ...args) {
+  if (name === 'vscode') return { workspace: { isTrusted: true }, window: { showInformationMessage() {} } };
+  if (name === './commanding/robotjs-handlers') return { typedRobot: native };
+  if (name === './native-capture') return { capturePrimaryScreen: async () => { captures++; return Buffer.alloc(4096); }, nativeResizeJpeg: async () => null };
+  if (name === './jimp') return { createImage: async () => ({ width: 1440, height: 900, getBuffer: async () => Buffer.from('frame') }) };
+  if (name === './commanding/command-handler') return { handleCommand() {} };
+  if (name === './files/utils') return { handleFileUpload() { uploads++; } };
+  return originalLoad.call(this, name, ...args);
+};
+const { startServer, stopServer } = require('../src/server.ts');
+const { store } = require('../src/state/store.ts');
+Module._load = originalLoad;
+const token = 'c'.repeat(64);
+const message = socket => once(socket, 'message').then(([data]) => JSON.parse(data.toString()));
+test('extension requires pairing, streams only on demand, rejects malformed text and releases listener', async () => {
+  store.setState({ server: { port: 0, isRunning: false, address: null } });
+  await assert.rejects(startServer('0.0.0.0', token));
+  await startServer('127.0.0.1', token);
+  const wss = store.getState().websocket.wss;
+  const port = wss.address().port;
+  let client;
+  try {
+    const bad = new WebSocket(`ws://127.0.0.1:${port}`);
+    await new Promise(resolve => bad.on('error', resolve));
+    assert.equal(captures, 0);
+    client = new WebSocket(`ws://127.0.0.1:${port}`, { headers: { Authorization: 'Bearer ' + token } });
+    const hello = message(client);
+    await once(client, 'open');
+    const capabilities = await hello;
+    assert.equal(capabilities.type, 'server_capabilities');
+    assert.equal(capabilities.features.vncSharedPort, true);
+    assert.equal(capabilities.features.pty, false);
+    assert.deepEqual(capabilities.features.agents, []);
+    assert.equal(captures, 0);
+    const rejected = message(client); client.send('{broken');
+    assert.equal((await rejected).type, 'error'); assert.equal(uploads, 0);
+    const frame = message(client); client.send(JSON.stringify({ type: 'vnc_start' }));
+    assert.equal((await frame).type, 'screen-update'); assert.ok(captures > 0);
+    const serverSocket = [...wss.clients][0];
+    const { ScreenCaptureManager } = require('../src/websockets.ts');
+    const manager = ScreenCaptureManager.getInstance();
+    let sends = 0;
+    const originalSend = serverSocket.send;
+    serverSocket.send = function(...args) { sends++; return originalSend.apply(this, args); };
+    Object.defineProperty(serverSocket, 'bufferedAmount', { value: 1, configurable: true });
+    manager.subscribers[0](Buffer.from('blocked frame'), { width: 1440, height: 900 });
+    assert.equal(sends, 0, 'backed-up sockets must not enqueue another frame');
+    delete serverSocket.bufferedAmount;
+    const rejectedKey = message(client); client.send(JSON.stringify({ type: 'vnc_keyboard_event', key: 'constructor' }));
+    assert.equal((await rejectedKey).type, 'error'); assert.deepEqual(taps, []);
+    client.send(JSON.stringify({ type: 'vnc_keyboard_event', key: 'a', modifier: ['command'] }));
+    client.send(JSON.stringify({ type: 'vnc_type', text: 'after shortcut' }));
+    const processed = message(client); client.send('{broken'); await processed;
+    assert.deepEqual(typed, ['after shortcut']);
+    assert.deepEqual(modifiers, []);
+  } finally {
+    const closed = client ? once(client, 'close') : Promise.resolve();
+    stopServer(); await closed;
+  }
+  // Rebind the exact port; old implementation leaked its HTTP listener.
+  store.setState({ server: { port, isRunning: false, address: null } });
+  await startServer('127.0.0.1', token); stopServer();
+});

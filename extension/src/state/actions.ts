@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import * as WebSocket from "ws";
+import WebSocket from "ws";
 import { store, AppState } from "./store";
 
 export function setServerRunning(isRunning: boolean) {

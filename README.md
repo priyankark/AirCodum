@@ -1,5 +1,8 @@
 # AirCodum: Smartphone powered Remote Control for VS Code
 
+> Connection security changed: pairing and encrypted remote transport are now required. Read [Connection setup](CONNECTION_SETUP.md) before connecting.
+
+
 ## Table of Contents
 1. [Introduction](#introduction)
 2. [Installation](#installation)
