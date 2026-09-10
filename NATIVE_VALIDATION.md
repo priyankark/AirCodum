@@ -61,3 +61,8 @@ JavaScript and all native modules, is byte-identical. This promotion does not
 represent another native mobile E2E run; the runtime coverage above applies.
 
 GA VSIX SHA-256: `831d840500ab6c07b862296f223490f8e8f5a2824a05ff3e4cb748f20d099cf6`.
+
+The public Marketplace catalog confirmed 0.2.1 without the PreRelease property.
+The downloaded Marketplace package matched the GA SHA-256 after HTTP gzip
+decoding. A fresh isolated VS Code 1.121.0 profile installed
+`priyankark.aircodum-app` as 0.2.1 without `--pre-release` or a pinned version.
