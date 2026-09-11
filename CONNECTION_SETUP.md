@@ -21,3 +21,11 @@ Send inserts the local text draft; Enter presses a separate desktop key. Leaving
 Validation commands: `npm run compile` and `npm run test:security` in the extension; `npx tsc --noEmit` and `npm run test:security` in the original mobile repo. See [NATIVE_VALIDATION.md](NATIVE_VALIDATION.md) for real VS Code and Android testing.
 
 The separate Agentum stack uses ports 11042/11043 and its own pairing credential. Its setup belongs to the [Agentum CLI PR](https://github.com/priyankark/agentum-cli/pull/3).
+
+## QR and sleep recovery (extension 0.2.3 / mobile 2.4.1)
+
+QR is optional; manual TLS/Tailscale host, port and token entry remains supported. QR images are generated locally and hidden when the listener changes. Both mobile platforms validate the payload, store the credential in SecureStore and use the existing authenticated handshake.
+
+Keep Mac awake holds a process-scoped macOS power assertion only while the server runs; stop, disable, or exit releases it. It changes no global power preferences. Lid closure can still force sleep. Apple-supported closed-display operation needs power, an external display, and keyboard/mouse. This extension cannot serve requests while the OS is asleep. Mobile retries continue with capped backoff while active, recover on foreground, and stop after Disconnect or authentication rejection.
+
+References: https://developer.apple.com/documentation/iokit/kiopmassertiontypepreventuseridlesystemsleep and https://support.apple.com/en-us/117373

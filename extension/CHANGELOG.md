@@ -1,3 +1,9 @@
+## 0.2.3
+
+- Added QR pairing with AirCodum mobile 2.4.1; manual connection controls remain available.
+- Added Keep Mac awake while the server runs, with guidance for supported closed-display use.
+- Added heartbeat support and removal of stale connections after sleep or network interruption.
+
 ## 0.2.2
 
 - Added connection controls showing the active host, port, and server status.

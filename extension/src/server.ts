@@ -20,7 +20,23 @@ export async function startServer(address: string, token: string): Promise<void>
     server: httpServer, maxPayload: MAX_PAYLOAD, perMessageDeflate: false,
     verifyClient: ({ req }: { req: import('http').IncomingMessage }) => wss.clients.size < 4 && authorized(req, token),
   });
-  wss.on("connection", handleWebSocketConnection);
+  // The HTTP listener owns startup/runtime errors; consume ws’s forwarded copy.
+  wss.on("error", () => {});
+  const alive = new WeakMap<import('ws'), boolean>();
+  wss.on('connection', socket => {
+    alive.set(socket, true);
+    socket.on('pong', () => alive.set(socket, true));
+    handleWebSocketConnection(socket);
+  });
+  const heartbeat = setInterval(() => {
+    for (const socket of wss.clients) {
+      if (!alive.get(socket)) { socket.terminate(); continue; }
+      alive.set(socket, false);
+      socket.ping();
+    }
+  }, 30000);
+  heartbeat.unref();
+  wss.once('close', () => clearInterval(heartbeat));
   listener = httpServer;
   try {
     await new Promise<void>((resolve, reject) => {

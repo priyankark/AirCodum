@@ -21,11 +21,24 @@ import { initializeSecrets, getPairingToken } from "./ai/utils";
 import { store } from "./state/store";
 import { startServer, stopServer } from "./server";
 import { createWebviewPanel } from "./webview";
+import { KeepAwake } from "./keep-awake";
 import { networkInterfaces } from "os";
 import { tailscaleAddresses } from "./connection";
 
 export async function activate(context: vscode.ExtensionContext) {
   await initializeSecrets(context);
+  const updatePowerStatus = () => store.getState().webview.panel?.webview.postMessage({ type: 'power', active: keepAwake.active });
+  const keepAwake = new KeepAwake(updatePowerStatus, message => { vscode.window.showErrorMessage(message); });
+  const syncPower = () => keepAwake.update(vscode.workspace.getConfiguration('aircodum').get<boolean>('keepAwake', false), store.getState().server.isRunning);
+  const unsubscribePower = store.subscribe(syncPower);
+  context.subscriptions.push({ dispose: () => { unsubscribePower(); keepAwake.stop(); } });
+  context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(event => { if (event.affectsConfiguration('aircodum.keepAwake')) syncPower(); }));
+  context.subscriptions.push(vscode.commands.registerCommand('extension.toggleAirCodumKeepAwake', async () => {
+    const config = vscode.workspace.getConfiguration('aircodum');
+    await config.update('keepAwake', !config.get<boolean>('keepAwake', false), vscode.ConfigurationTarget.Global);
+    syncPower(); updatePowerStatus();
+  }));
+  context.subscriptions.push(vscode.commands.registerCommand('extension.aircodumPowerStatus', updatePowerStatus));
 
   const showPanel = () => {
     const { webview } = store.getState();

@@ -23,6 +23,11 @@ const message = socket => once(socket, 'message').then(([data]) => JSON.parse(da
 test('extension requires pairing, streams only on demand, rejects malformed text and releases listener', async () => {
   store.setState({ server: { port: 0, isRunning: false, address: null } });
   await assert.rejects(startServer('0.0.0.0', token));
+  const occupied = require('net').createServer(); occupied.listen(0, '127.0.0.1'); await once(occupied, 'listening');
+  store.setState({ server: { port: occupied.address().port, isRunning: false, address: null } });
+  await assert.rejects(startServer('127.0.0.1', token), /EADDRINUSE/);
+  await new Promise(resolve => occupied.close(resolve));
+  store.setState({ server: { port: 0, isRunning: false, address: null } });
   await startServer('127.0.0.1', token);
   const wss = store.getState().websocket.wss;
   const port = wss.address().port;
@@ -40,6 +45,9 @@ test('extension requires pairing, streams only on demand, rejects malformed text
     assert.equal(capabilities.features.pty, false);
     assert.deepEqual(capabilities.features.agents, []);
     assert.equal(captures, 0);
+    assert.equal(capabilities.features.heartbeat, true);
+    const pong = message(client); client.send(JSON.stringify({type: 'ping'}));
+    assert.equal((await pong).type, 'pong');
     const rejected = message(client); client.send('{broken');
     assert.equal((await rejected).type, 'error'); assert.equal(uploads, 0);
     const frame = message(client); client.send(JSON.stringify({ type: 'vnc_start' }));

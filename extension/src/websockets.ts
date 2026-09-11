@@ -351,6 +351,7 @@ class VSCodeVNCConnection {
         }
         const data = JSON.parse(text);
         switch (data.type) {
+          case 'ping': this.ws.send(JSON.stringify({ type: 'pong' })); break;
           case 'vnc_start': this.subscribeToFrameUpdates(); break;
           case 'vnc_stop': this.dispose(); break;
           case 'mouse-event': case 'vnc_mouse_event':
@@ -487,7 +488,7 @@ export function handleWebSocketConnection(ws: WebSocket) {
   console.log("New WebSocket connection");
   addWebSocketConnection(ws);
   ws.send(JSON.stringify({ type: 'server_capabilities', protocolVersion: 1,
-    features: { agents: [], pty: false, vnc: true, vncSharedPort: true,
+    features: { agents: [], pty: false, vnc: true, vncSharedPort: true, heartbeat: true,
       vncStreamControl: true, vncTextInput: true } }));
 
   // Create a connection instance for this socket

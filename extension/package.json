@@ -2,7 +2,7 @@
   "name": "aircodum-app",
   "displayName": "AirCodum: Smartphone based Remote Control for VS Code",
   "description": "Smartphone based Remote Control for VS Code. Control IDE actions, send files and images, get AI assistance and more, right from your smartphone.",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "publisher": "priyankark",
   "repository": "https://github.com/priyankark/AirCodum",
   "engines": {
@@ -39,6 +39,10 @@
       {
         "command": "extension.configureAirCodumConnection",
         "title": "AirCodum: Choose Connection"
+      },
+      {
+        "command": "extension.toggleAirCodumKeepAwake",
+        "title": "AirCodum: Toggle Keep Mac Awake"
       }
     ],
     "configuration": {
@@ -49,6 +53,12 @@
           "default": "127.0.0.1",
           "scope": "application",
           "description": "Listen address. For remote access, use your encrypted VPN interface address or a TLS proxy."
+        },
+        "aircodum.keepAwake": {
+          "type": "boolean",
+          "default": false,
+          "scope": "application",
+          "description": "On macOS, prevent idle sleep while the AirCodum server runs. Does not override lid-close sleep; supported closed-display use requires power and an external display."
         }
       }
     }
@@ -66,12 +76,14 @@
   "devDependencies": {
     "@types/jimp": "^0.2.1",
     "@types/node": "^18",
+    "@types/qrcode": "^1.5.6",
     "@types/vscode": "^1.73.0",
     "@types/ws": "^8.5.12",
     "@typescript-eslint/eslint-plugin": "^7.14.0",
     "@typescript-eslint/parser": "^7.14.0",
     "esbuild": "^0.25.0",
     "eslint": "^8.26.0",
+    "jsqr": "^1.4.0",
     "npm-run-all": "^4.1.5",
     "typescript": "^5.5.2"
   },
@@ -86,6 +98,7 @@
     "node-fetch": "^2.7.0",
     "node-webp": "^1.0.2",
     "openai": "^4.67.0",
+    "qrcode": "^1.5.4",
     "screenshot-desktop": "^1.15.2",
     "ws": "^8.18.0"
   },

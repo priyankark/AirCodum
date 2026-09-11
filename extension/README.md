@@ -1,3 +1,9 @@
+## Scan to connect
+
+With AirCodum mobile 2.4.1 or later, choose your Tailscale connection in this extension and click **Show pairing QR**. Tap **Scan QR to connect** on Android or iOS. The scan fills host, port, transport and pairing key and connects. Manual connection and Copy pairing key remain available.
+
+**Keep Mac awake** prevents idle sleep while the server is running. It does not override macOS lid-close sleep. For supported closed-display use, connect power, an external display, and a keyboard and mouse. The mobile app retries when the desktop becomes reachable again.
+
 ## Connect your phone
 
 Open **AirCodum Webview** and use **Choose connection** to select the Mac’s Tailscale address. The panel shows the active host, port, and server status. Use **Copy pairing key** and paste the key in the mobile connection settings. Start and stop the listener from the same panel.

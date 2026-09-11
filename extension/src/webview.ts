@@ -1,11 +1,12 @@
 import * as vscode from "vscode";
-import { getApiKey, saveApiKey } from "./ai/utils";
+import { getApiKey, getPairingToken, saveApiKey } from "./ai/utils";
 import { setWebviewPanel } from "./state/actions";
 import { handleChat } from "./ai/api";
 
 import { randomBytes } from "crypto";
 import { store } from "./state/store";
-import { connectionDetails } from "./connection";
+import * as QRCode from "qrcode";
+import { connectionDetails, pairingCode } from "./connection";
 
 function getWebviewContent(): string {
   const nonce = randomBytes(24).toString("hex");
@@ -135,10 +136,22 @@ function getWebviewContent(): string {
         <p>On your phone, select <strong>Tailscale / localhost (ws)</strong> for a direct connection.
         Connect Tailscale on both devices using the same account.</p>
         <div class="connection-actions">
+            <button data-action="showPairingQr">Show pairing QR</button>
             <button data-action="configureConnection">Choose connection</button>
             <button data-action="copyPairingToken">Copy pairing key</button>
             <button data-action="startServer">Start server</button>
             <button data-action="stopServer">Stop server</button>
+        </div>
+        <div id="pairingQrContainer" style="display: none; margin-top: 16px;">
+            <img id="pairingQr" alt="AirCodum pairing QR code" style="width: min(320px, 100%); height: auto; background: white; border-radius: 8px;">
+            <p>In AirCodum on your phone, tap <strong>Scan QR to connect</strong>. Requires AirCodum 2.4.1 or later.</p>
+            <button data-action="hidePairingQr">Hide QR code</button>
+        </div>
+        <div id="powerSettings" style="display: none; margin-top: 20px;">
+            <h2>Stay connected</h2>
+            <button data-action="toggleKeepAwake">Toggle Keep Mac awake</button>
+            <p id="powerStatus" aria-live="polite"></p>
+            <p>Keep Mac awake prevents idle sleep while the server runs. Closing the lid can still put macOS to sleep. For supported lid-closed operation, connect power, an external display, and a keyboard and mouse. AirCodum on your phone reconnects when the Mac is reachable again.</p>
         </div>
         <p>The pairing key is required in the phone’s connection settings. Copy it here and paste it on your phone.</p>
         <div>
@@ -178,7 +191,11 @@ function getWebviewContent(): string {
   
     <script nonce="${nonce}">
         const vscode = acquireVsCodeApi();
+        let connectionIdentity;
         const actions = { saveApiKey, copyToClipboard, addToCurrentFile, chat,
+          showPairingQr: () => vscode.postMessage({command: 'showPairingQr'}),
+          hidePairingQr: () => { document.getElementById('pairingQrContainer').style.display = 'none'; document.getElementById('pairingQr').removeAttribute('src'); },
+          toggleKeepAwake: () => vscode.postMessage({command: 'toggleKeepAwake'}),
           configureConnection: () => vscode.postMessage({command: 'configureConnection'}),
           copyPairingToken: () => vscode.postMessage({command: 'copyPairingToken'}),
           startServer: () => vscode.postMessage({command: 'startServer'}),
@@ -245,7 +262,19 @@ function getWebviewContent(): string {
                 case 'chatResponse':
                     handleChatResponseMessage(message);
                     break;
+                case 'power':
+                    document.getElementById('powerStatus').textContent = message.active ? 'Keep Mac awake is active while the server runs.' : 'Keep Mac awake is off or the server is stopped.';
+                    break;
+                case 'pairingQr':
+                    document.getElementById('pairingQr').src = message.dataUrl;
+                    document.getElementById('pairingQrContainer').style.display = 'block';
+                    document.getElementById('errorContainer').style.display = 'none';
+                    break;
                 case 'connection':
+                    const identity = JSON.stringify([message.host, message.port, message.running]);
+                    if (identity !== connectionIdentity) actions.hidePairingQr();
+                    connectionIdentity = identity;
+                    document.getElementById('powerSettings').style.display = message.mac ? 'block' : 'none';
                     document.getElementById('ipAddress').textContent = message.host;
                     document.getElementById('serverPort').textContent = String(message.port);
                     document.getElementById('serverState').textContent = message.running ? 'Running' : 'Stopped';
@@ -312,7 +341,7 @@ export function createWebviewPanel(
   const sendConnection = () => {
     const server = store.getState().server;
     const configured = vscode.workspace.getConfiguration("aircodum").get<string>("bindAddress", "127.0.0.1");
-    panel.webview.postMessage({ type: "connection", ...connectionDetails(server, configured) });
+    panel.webview.postMessage({ type: "connection", mac: process.platform === "darwin", ...connectionDetails(server, configured) });
   };
   const unsubscribe = store.subscribe(sendConnection);
 
@@ -333,9 +362,27 @@ export function createWebviewPanel(
         case "addToCurrentFile":
           addToCurrentFile(message.text);
           break;
+        case "toggleKeepAwake":
+          await vscode.commands.executeCommand('extension.toggleAirCodumKeepAwake');
+          break;
         case "connection":
           sendConnection();
+          await vscode.commands.executeCommand('extension.aircodumPowerStatus');
           break;
+        case "showPairingQr": {
+          try {
+            const server = store.getState().server;
+            const payload = pairingCode(server, await getPairingToken());
+            const dataUrl = await QRCode.toDataURL(payload, { width: 640, margin: 4, errorCorrectionLevel: 'M' });
+            const current = store.getState().server;
+            if (current.isRunning && current.address === server.address && current.port === server.port) {
+              panel.webview.postMessage({ type: "pairingQr", dataUrl });
+            }
+          } catch (error) {
+            panel.webview.postMessage({ type: "error", message: error instanceof Error ? error.message : "Unable to create pairing QR code." });
+          }
+          break;
+        }
         case "configureConnection":
           await vscode.commands.executeCommand("extension.configureAirCodumConnection");
           break;
