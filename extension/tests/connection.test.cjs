@@ -25,6 +25,23 @@ test('panel reports the actual listener until restarted, and explains local-only
 });
 
 const { pairingCode } = require('../src/connection.ts');
+const { localNetworkAddresses } = require('../src/connection.ts');
+const { allowedBind, protectedBind, localNetworkAddress } = require('../src/security.ts');
+test('LAN pairing admits only explicit private IPv4 interfaces and keeps public listeners blocked', () => {
+ const accepted = ['10.0.0.1', '172.16.0.1', '172.31.255.254', '192.168.1.2'];
+ for (const host of accepted) {
+  assert.equal(localNetworkAddress(host), true);
+  assert.equal(allowedBind(host), true);
+  assert.equal(protectedBind(host), false, 'Local Wi-Fi is not described as encrypted');
+  assert.equal(JSON.parse(pairingCode({isRunning:true,address:host,port:11040}, 'a'.repeat(64))).host,host);
+ }
+ for (const host of ['0.0.0.0','::','8.8.8.8','172.15.0.1','172.32.0.1','192.169.1.2','169.254.1.1','192.168.999.1','010.0.0.1','localhost.example']) {
+  assert.equal(allowedBind(host),false,host);
+  assert.throws(()=>pairingCode({isRunning:true,address:host,port:11040},'a'.repeat(64)));
+ }
+ assert.deepEqual(localNetworkAddresses({en0:accepted.map(address=>({address,internal:false})),lo:[{address:'10.2.3.4',internal:true}],public:[{address:'8.8.8.8',internal:false}]}),accepted);
+ assert.equal(connectionDetails({isRunning:true,address:'192.168.1.2',port:11040},'127.0.0.1').localNetwork,true);
+});
 const QRCode = require('qrcode');
 const { PNG } = require('pngjs');
 const jsQR = require('jsqr');

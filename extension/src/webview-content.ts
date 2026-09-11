@@ -105,9 +105,9 @@ export function getWebviewContent(): string {
       </div>
       <div id="qrPanel" class="pairing" role="tabpanel" aria-labelledby="qrTab">
         <div id="pairingQrContainer" hidden><img id="pairingQr" alt="Scan this pairing code with AirCodum on your phone"></div>
-        <p id="qrHint" class="muted">Connect Tailscale on your computer and phone.</p>
+        <p id="qrHint" class="muted">Choose a local Wi-Fi or Tailscale connection.</p>
         <button id="pairingAction" class="primary" data-action="pair" disabled>Show QR code</button>
-        <p class="caption muted">On your phone: AirCodum → Scan QR to connect.<br>Requires mobile version 2.4.1 or later.</p>
+        <p class="caption muted">On your phone: AirCodum → Scan QR to connect.<br><span id="mobileVersionHint">Requires mobile version 2.4.1 or later.</span></p>
       </div>
       <div id="manualPanel" role="tabpanel" aria-labelledby="manualTab" hidden>
         <p class="manual-help muted">Enter these details in AirCodum on your phone, then paste the pairing key.</p>
@@ -119,7 +119,7 @@ export function getWebviewContent(): string {
     <details class="settings" id="serverSettings">
       <summary>Server settings &amp; troubleshooting</summary>
       <div class="settings-body">
-        <div class="setting-row"><div><h3>Connection address</h3><p class="muted">Choose Tailscale or a local TLS proxy.</p></div><button class="secondary" data-action="configureConnection">Change</button></div>
+        <div class="setting-row"><div><h3>Connection address</h3><p class="muted">Local Wi-Fi, Tailscale, or a TLS proxy.</p></div><button class="secondary" data-action="configureConnection">Change</button></div>
         <div class="setting-row"><div><h3>Server</h3><p class="muted" id="serverControlHint">Loading…</p></div><button id="serverControl" class="secondary" data-action="toggleServer" disabled>Start server</button></div>
         <div id="powerSettings" class="power" hidden>
           <label><input id="keepAwake" type="checkbox">Keep Mac awake while the server runs</label>
@@ -152,21 +152,22 @@ export function getWebviewContent(): string {
   const isLocal = host => host === 'localhost' || host === '::1' || host.startsWith('127.');
   function renderConnection() {
     if (!connection) return;
-    const c = connection, local = isLocal(c.host), count = c.running ? c.clients : 0;
+    const c = connection, local = isLocal(c.host), lan = c.localNetwork, count = c.running ? c.clients : 0;
     el('serverState').textContent = count ? 'Connected' : c.running ? 'Server running' : 'Server stopped';
     el('serverState').dataset.state = count ? 'connected' : c.running ? 'ready' : 'stopped';
     el('connectionTitle').textContent = count ? "You're connected" : 'Connect your phone';
     el('connectionHint').textContent = count ? count + (count === 1 ? ' active connection. Your phone is ready to use.' : ' active connections. Your devices are ready to use.') : 'Use QR pairing or enter the connection details yourself.';
     el('serverAddress').textContent = (c.host.includes(':') ? '[' + c.host + ']' : c.host) + ':' + c.port;
-    el('addressKind').textContent = local ? 'Local server' : 'Tailscale address';
+    el('addressKind').textContent = local ? 'Local server' : lan ? 'Local Wi-Fi address' : 'Tailscale address';
     el('ipAddress').textContent = c.host;
     el('serverPort').textContent = String(c.port);
-    el('transportLabel').textContent = local ? 'Localhost / your TLS proxy' : 'Tailscale';
-    el('manualHint').textContent = !c.running ? 'The server is stopped. Start it in Server settings below.' : local ? 'This address only works on this computer. For phone access, change to Tailscale below or use your configured TLS proxy address.' : 'Choose Tailscale on your phone (called Tailscale / localhost (ws) in older versions). Connect both devices to the same Tailscale account.';
-    el('qrHint').textContent = !c.running ? 'Start the server, then pair your phone.' : local ? 'Choose your Tailscale address so your phone can reach this computer.' : qrRequested ? 'Open AirCodum on your phone and scan this code.' : 'Connect both devices to the same Tailscale account, then scan to pair.';
+    el('transportLabel').textContent = local ? 'Localhost / your TLS proxy' : lan ? 'Local Wi-Fi' : 'Tailscale';
+    el('manualHint').textContent = !c.running ? 'The server is stopped. Start it in Server settings below.' : local ? 'This address only works on this computer. For phone access, choose your local Wi-Fi or Tailscale address below, or use your configured TLS proxy.' : lan ? 'Use mobile 2.4.2 or later and choose Local Wi-Fi. Both devices must be on the same local network. Traffic is not encrypted; use a network you trust.' : 'Choose Tailscale on your phone (called Tailscale / localhost (ws) in older versions). Connect both devices to the same Tailscale account.';
+    el('qrHint').textContent = !c.running ? 'Start the server, then pair your phone.' : local ? 'Choose your local Wi-Fi or Tailscale address so your phone can reach this computer.' : lan ? (qrRequested ? 'Scan with AirCodum on the same Wi-Fi. Traffic is not encrypted; use a network you trust.' : 'Connect both devices to the same Wi-Fi or local network, then scan to pair. Traffic is not encrypted; use a network you trust.') : qrRequested ? 'Open AirCodum on your phone and scan this code.' : 'Connect both devices to the same Tailscale account, then scan to pair.';
     const action = el('pairingAction');
     action.disabled = qrRequested && el('pairingQrContainer').hidden;
-    action.textContent = !c.running ? 'Start server' : local ? 'Choose Tailscale' : qrRequested ? (el('pairingQrContainer').hidden ? 'Creating QR code…' : 'Hide QR code') : count ? 'Pair another phone' : 'Show QR code';
+    action.textContent = !c.running ? 'Start server' : local ? 'Choose connection' : qrRequested ? (el('pairingQrContainer').hidden ? 'Creating QR code…' : 'Hide QR code') : count ? 'Pair another phone' : 'Show QR code';
+    el('mobileVersionHint').textContent = lan ? 'Local Wi-Fi requires mobile version 2.4.2 or later.' : 'Requires mobile version 2.4.1 or later.';
     el('serverControl').textContent = c.running ? 'Stop server' : 'Start server';
     el('serverControl').disabled = false;
     el('serverControlHint').textContent = c.running ? 'Stopping disconnects your phone.' : 'Start to accept connections.';

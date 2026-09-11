@@ -2,7 +2,7 @@
   "name": "aircodum-app",
   "displayName": "AirCodum: Smartphone based Remote Control for VS Code",
   "description": "Smartphone based Remote Control for VS Code. Control IDE actions, send files and images, get AI assistance and more, right from your smartphone.",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "publisher": "priyankark",
   "repository": "https://github.com/priyankark/AirCodum",
   "engines": {
@@ -52,7 +52,7 @@
           "type": "string",
           "default": "127.0.0.1",
           "scope": "application",
-          "description": "Listen address. For remote access, use your encrypted VPN interface address or a TLS proxy."
+          "description": "Listen on a specific local Wi-Fi/Ethernet IP, Tailscale IP, or localhost behind a TLS proxy. Local Wi-Fi traffic is unencrypted; use trusted networks. Pairing is always required."
         },
         "aircodum.keepAwake": {
           "type": "boolean",

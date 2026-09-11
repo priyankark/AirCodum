@@ -4,7 +4,7 @@ import * as vscode from "vscode";
 import { handleWebSocketConnection } from "./websockets";
 import { store } from "./state/store";
 import { setServerAddress, setServerRunning, setWebSocketServer } from "./state/actions";
-import { authorized, MAX_PAYLOAD, protectedBind } from "./security";
+import { authorized, MAX_PAYLOAD, allowedBind } from "./security";
 import { connectionLog } from './connection-log';
 
 let listener: http.Server | undefined;
@@ -14,7 +14,7 @@ export async function startServer(address: string, token: string): Promise<void>
   if (store.getState().server.isRunning || starting) return;
   if (!vscode.workspace.isTrusted) throw new Error("Trust this workspace before enabling remote control.");
   if (token.length < 32) throw new Error("A pairing token is required.");
-  if (!protectedBind(address)) throw new Error("Use localhost behind a TLS proxy, or bind to your Tailscale interface IP.");
+  if (!allowedBind(address)) throw new Error("Choose a local Wi-Fi or Tailscale interface address, or localhost behind a TLS proxy. Public and wildcard listeners are not allowed.");
   starting = true;
   const httpServer = http.createServer((_req, res) => { res.writeHead(404); res.end(); });
   httpServer.on('clientError', (error: Error & { rawPacket?: Buffer }, socket) => {

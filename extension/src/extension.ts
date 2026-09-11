@@ -23,7 +23,7 @@ import { startServer, stopServer } from "./server";
 import { createWebviewPanel } from "./webview";
 import { KeepAwake } from "./keep-awake";
 import { networkInterfaces } from "os";
-import { tailscaleAddresses } from "./connection";
+import { tailscaleAddresses, localNetworkAddresses } from "./connection";
 import { initializeConnectionLog } from './connection-log';
 
 export async function activate(context: vscode.ExtensionContext) {
@@ -60,12 +60,17 @@ export async function activate(context: vscode.ExtensionContext) {
   };
 
   context.subscriptions.push(vscode.commands.registerCommand("extension.configureAirCodumConnection", async () => {
-    const addresses = tailscaleAddresses(networkInterfaces());
-    const choices = addresses.map(address => ({ label: "Tailscale", description: address, address }));
-    choices.push({ label: "Localhost", description: "This Mac only, or a local TLS proxy", address: "127.0.0.1" });
+    const interfaces = networkInterfaces();
+    const addresses = tailscaleAddresses(interfaces);
+    const localAddresses = localNetworkAddresses(interfaces);
+    const choices = [
+      ...localAddresses.map(address => ({ label: "Local Wi-Fi / Ethernet", description: address, detail: "Same local network. Pairing required; traffic is not encrypted. Use a network you trust.", address })),
+      ...addresses.map(address => ({ label: "Tailscale", description: address, detail: "Encrypted connection, including when your phone is away from home.", address })),
+      { label: "Localhost / TLS proxy", description: "127.0.0.1", detail: "This computer only, or your configured TLS reverse proxy.", address: "127.0.0.1" },
+    ];
     const choice = await vscode.window.showQuickPick(choices, {
       title: "AirCodum connection",
-      placeHolder: addresses.length ? "Choose the address your phone will connect to" : "No Tailscale address found. Connect Tailscale on this Mac, then try again.",
+      placeHolder: addresses.length || localAddresses.length ? "Choose local Wi-Fi or Tailscale for your phone" : "No network address found. Connect to Wi-Fi, Ethernet or Tailscale, then try again.",
     });
     if (!choice) return;
     try {

@@ -1,6 +1,6 @@
 ## Scan to connect
 
-With AirCodum mobile 2.4.1 or later, choose your Tailscale connection in this extension and open **Connection → QR code → Show QR code**. Tap **Scan QR to connect** on Android or iOS. The scan fills host, port, transport and pairing key and connects. Use **Enter manually** for host, port, connection method, and **Copy pairing key**.
+With AirCodum mobile 2.4.2 or later, choose **Local Wi-Fi / Ethernet** for devices on the same network, or **Tailscale** for remote access and open **Connection → QR code → Show QR code**. Tap **Scan QR to connect** on Android or iOS. The scan fills host, port, transport and pairing key and connects. Use **Enter manually** for host, port, connection method, and **Copy pairing key**.
 
 **Keep Mac awake** prevents idle sleep while the server is running. It does not override macOS lid-close sleep. For supported closed-display use, connect power, an external display, and a keyboard and mouse. The mobile app retries when the desktop becomes reachable again.
 
@@ -59,13 +59,13 @@ Check out this demo to understand how to use AirCodum: [AirCodum YouTube Demo](h
 
 This release requires a pairing-capable build of the original **AirCodum app (`com.codeair`)**. Agentum is a separate product. Install the updated mobile app before switching to this extension release. Old mobile builds can continue using the previous extension; they cannot authenticate to this secured listener.
 
-The listener uses port **11040** for commands, files and VNC. It defaults to localhost. For remote use, set the application-level `aircodum.bindAddress` setting to your desktop's Tailscale IP, or leave localhost behind a TLS reverse proxy. Public/wildcard/ordinary LAN binds are rejected.
+The listener uses port **11040** for commands, files and VNC. It defaults to localhost. Choose a detected private LAN address for same-network use, a Tailscale address for remote use, or leave localhost behind a TLS reverse proxy. Public and wildcard binds are rejected. Local Wi-Fi requires mobile 2.4.2 and uses unencrypted traffic; use a network you trust. Pairing remains required.
 
 ## Getting Started
 
 1. Open a trusted VS Code workspace and run **Start AirCodum Server** from the Command Palette.
 2. Run **AirCodum: Copy Pairing Token** and paste the token into the mobile app's connection settings. Keep it private: it authorizes desktop control.
-3. Enter the desktop's Tailscale IP and port 11040, selecting **Tailscale / localhost (ws)**. Both devices must use your actual Tailscale network. For a TLS proxy, use its hostname/port and enable TLS with a trusted certificate.
+3. Choose **Local Wi-Fi / Ethernet** in the extension for same-network access. Enter the displayed private IP and port 11040 in the phone; **Local Wi-Fi** selects automatically. On iOS, allow Local Network access. Alternatively, choose **Tailscale** on both devices for remote access, or **Custom TLS server** for your configured TLS proxy.
 4. Connect. The app selects supported features automatically; no rollout flags are needed.
 5. Open VNC to stream the desktop. Compose text locally, then press **Send** to insert it. **Enter** is a separate remote key. On macOS, grant screen-recording and accessibility permissions to the VS Code host.
 
@@ -152,7 +152,7 @@ Tailscale enables secure remote access to your AirCodum server from anywhere:
    - They will automatically connect to your Tailscale network
 
 3. Set `aircodum.bindAddress` to your desktop's Tailscale IP and restart the AirCodum server.
-4. Enter that IP, port 11040 and the pairing token in the app, then select **Tailscale / localhost (ws)**. Plaintext hostnames are not accepted; use the actual Tailscale IP or TLS.
+4. Enter that IP, port 11040 and the pairing token in the app, then select **Tailscale**. Plaintext hostnames are not accepted; use the actual Tailscale IP or TLS.
 
 ## Command Reference
 
@@ -181,7 +181,7 @@ VS Code Commands (examples):
 ## Security Considerations
 
 - Pairing is required before commands, uploads or native input are accepted. Tokens and OpenAI keys are stored in VS Code SecretStorage.
-- Use an actual Tailscale connection or a TLS proxy. A pairing token authenticates a device; it does not encrypt plain WebSocket traffic by itself.
+- Local Wi-Fi is unencrypted and intended for trusted networks. For encrypted access, use an actual Tailscale connection or a TLS proxy. A pairing token authenticates a device; it does not encrypt plain WebSocket traffic by itself.
 - Paired devices can control your desktop. Review received files before opening or executing them.
 - VNC capture runs only for subscribers, with bounded messages and newest-frame backpressure. Leaving VNC stops that subscription.
 - API keys previously placed in workspace `.env` files are no longer read. Re-enter the key in the webview. Existing files are untouched.
@@ -189,7 +189,7 @@ VS Code Commands (examples):
 ## Troubleshooting
 
 - **Can't start the server**: Make sure no other application is using the same port. Stop the other listener using port 11040 before starting AirCodum.
-- **Can't connect from other devices**: Check the pairing token, Tailscale/TLS transport, bind address and firewall.
+- **Can't connect from other devices**: Check the pairing token, selected address and firewall. Local Wi-Fi requires both devices on the same network, mobile 2.4.2, iOS Local Network permission, and a router that allows devices to communicate. Guest Wi-Fi may isolate clients.
 - **AI features not working**: Verify that you've entered a valid OpenAI API key in the settings.
 - **File transfer issues**: Check if your WebSocket client is correctly configured to connect to the AirCodum server address.
 - **Extension not loading**: Try uninstalling and reinstalling the extension. Ensure your VS Code is up to date.

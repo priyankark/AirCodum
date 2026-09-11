@@ -1,6 +1,6 @@
 # AirCodum: Smartphone powered Remote Control for VS Code
 
-> Connection security changed: pairing and encrypted remote transport are now required. Read [Connection setup](CONNECTION_SETUP.md) before connecting.
+> Connection security changed: pairing is required. Local Wi-Fi works without Tailscale with extension 0.2.6 and mobile 2.4.2; encrypted remote access uses Tailscale or TLS. Read [Connection setup](CONNECTION_SETUP.md) before connecting.
 
 
 ## Table of Contents

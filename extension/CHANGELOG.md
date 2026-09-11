@@ -1,3 +1,8 @@
+## 0.2.6
+
+- Restored same-network connections without Tailscale: choose Local Wi-Fi / Ethernet, then scan the QR code or enter details manually using mobile 2.4.2.
+- Explain local-network requirements and unencrypted traffic while keeping pairing mandatory and public/wildcard listeners blocked.
+
 ## 0.2.5
 
 - Reorganized the panel into Connection and Files & AI, with QR/manual pairing tabs and one main connection action.
