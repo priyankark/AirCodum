@@ -1,12 +1,12 @@
 ## Scan to connect
 
-With AirCodum mobile 2.4.1 or later, choose your Tailscale connection in this extension and click **Show pairing QR**. Tap **Scan QR to connect** on Android or iOS. The scan fills host, port, transport and pairing key and connects. Manual connection and Copy pairing key remain available.
+With AirCodum mobile 2.4.1 or later, choose your Tailscale connection in this extension and open **Connection → QR code → Show QR code**. Tap **Scan QR to connect** on Android or iOS. The scan fills host, port, transport and pairing key and connects. Use **Enter manually** for host, port, connection method, and **Copy pairing key**.
 
 **Keep Mac awake** prevents idle sleep while the server is running. It does not override macOS lid-close sleep. For supported closed-display use, connect power, an external display, and a keyboard and mouse. The mobile app retries when the desktop becomes reachable again.
 
 ## Connect your phone
 
-Open **AirCodum Webview** and use **Choose connection** to select the Mac’s Tailscale address. The panel shows the active host, port, and server status. Use **Copy pairing key** and paste the key in the mobile connection settings. Start and stop the listener from the same panel.
+Open **AirCodum Webview**. The **Connection** tab shows the server address and connection status, with **QR code** and **Enter manually** pairing options. Expand **Server settings & troubleshooting** to change the connection address, start or stop the server, set **Keep Mac awake**, or open the connection log. The **Files & AI** tab holds received content and the optional AI assistant.
 
 # AirCodum: Smartphone powered Remote Control for VS Code
 
@@ -52,8 +52,8 @@ Check out this demo to understand how to use AirCodum: [AirCodum YouTube Demo](h
 1. Obtain an API key from OpenAI (https://openai.com/)
 2. In VS Code, open the Command Palette (Ctrl+Shift+P or Cmd+Shift+P)
 3. Type "AirCodum: Open Webview" and select it
-4. In the AirCodum interface, enter your API key in the "OpenAI API Key" field
-5. Click "Save Key"
+4. Open **Files & AI → AI assistant → Set up AI**, then enter your API key.
+5. Click **Save key**. An API key is optional and is not needed for phone pairing.
 
 ### Pairing and transport
 
@@ -111,7 +111,7 @@ VNC Mode allows you to control VS Code directly through your smartphone's screen
 
 ### Using AI Chat
 
-1. In the AirCodum interface, find the "Chat with AI" section
+1. In the AirCodum interface, open **Files & AI → AI assistant**
 2. Type your question or request related to the recently sent files.
 3. Click "Send" or press Enter
 4. View the AI's response in the interface

@@ -1,4 +1,10 @@
-## 0.2.4 (unreleased)
+## 0.2.5
+
+- Reorganized the panel into Connection and Files & AI, with QR/manual pairing tabs and one main connection action.
+- Grouped address, server, keep-awake and troubleshooting controls in a collapsible settings section.
+- Added active connection status, accessible keyboard navigation, and responsive styling that follows the VS Code theme.
+- Kept optional AI setup out of phone pairing.
+
 
 - Added AirCodum Connections output logs for pairing failures, TLS mismatches and disconnect codes. Pairing keys and message contents are excluded.
 
