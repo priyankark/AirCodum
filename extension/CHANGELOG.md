@@ -1,3 +1,7 @@
+## 0.2.4 (unreleased)
+
+- Added AirCodum Connections output logs for pairing failures, TLS mismatches and disconnect codes. Pairing keys and message contents are excluded.
+
 ## 0.2.3
 
 - Added QR pairing with AirCodum mobile 2.4.1; manual connection controls remain available.

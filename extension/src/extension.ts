@@ -24,8 +24,10 @@ import { createWebviewPanel } from "./webview";
 import { KeepAwake } from "./keep-awake";
 import { networkInterfaces } from "os";
 import { tailscaleAddresses } from "./connection";
+import { initializeConnectionLog } from './connection-log';
 
 export async function activate(context: vscode.ExtensionContext) {
+  initializeConnectionLog(context);
   await initializeSecrets(context);
   const updatePowerStatus = () => store.getState().webview.panel?.webview.postMessage({ type: 'power', active: keepAwake.active });
   const keepAwake = new KeepAwake(updatePowerStatus, message => { vscode.window.showErrorMessage(message); });

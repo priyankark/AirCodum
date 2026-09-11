@@ -4,10 +4,11 @@ const { once } = require('node:events');
 const Module = require('node:module');
 const { WebSocket } = require('ws');
 let captures = 0, uploads = 0, taps = [], typed = [], modifiers = [];
+const connectionEvents = [];
 const native = { getScreenSize: () => ({ width: 1440, height: 900 }), keyTap: (key, held = []) => { taps.push(key); modifiers = held; }, keyToggle: key => { modifiers = modifiers.filter(m => m !== key); }, moveMouse() {}, mouseToggle() {}, typeString(text) { if (!modifiers.length) typed.push(text); } };
 const originalLoad = Module._load;
 Module._load = function(name, ...args) {
-  if (name === 'vscode') return { workspace: { isTrusted: true }, window: { showInformationMessage() {} } };
+  if (name === 'vscode') return { workspace: { isTrusted: true }, window: { showInformationMessage() {}, createOutputChannel() { return { appendLine: line => connectionEvents.push(line), dispose() {} }; } } };
   if (name === './commanding/robotjs-handlers') return { typedRobot: native };
   if (name === './native-capture') return { capturePrimaryScreen: async () => { captures++; return Buffer.alloc(4096); }, nativeResizeJpeg: async () => null };
   if (name === './jimp') return { createImage: async () => ({ width: 1440, height: 900, getBuffer: async () => Buffer.from('frame') }) };
@@ -17,6 +18,7 @@ Module._load = function(name, ...args) {
 };
 const { startServer, stopServer } = require('../src/server.ts');
 const { store } = require('../src/state/store.ts');
+require('../src/connection-log.ts').initializeConnectionLog({ subscriptions: [] });
 Module._load = originalLoad;
 const token = 'c'.repeat(64);
 const message = socket => once(socket, 'message').then(([data]) => JSON.parse(data.toString()));
@@ -35,6 +37,16 @@ test('extension requires pairing, streams only on demand, rejects malformed text
   try {
     const bad = new WebSocket(`ws://127.0.0.1:${port}`);
     await new Promise(resolve => bad.on('error', resolve));
+    const wrong = new WebSocket(`ws://127.0.0.1:${port}`, { headers: { Authorization: 'Bearer sensitive-invalid-key' } });
+    await new Promise(resolve => wrong.on('error', resolve));
+    const tls = require('net').connect(port, '127.0.0.1');
+    await once(tls, 'connect');
+    tls.write(Buffer.from([0x16, 0x03, 0x01, 0, 0]));
+    await once(tls, 'close');
+    assert.ok(connectionEvents.some(line => line.includes('missing pairing key')));
+    assert.ok(connectionEvents.some(line => line.includes('incorrect pairing key')));
+    assert.ok(connectionEvents.some(line => line.includes('TLS requested on plain WebSocket port')));
+    assert.ok(connectionEvents.every(line => !line.includes(token) && !line.includes('sensitive-invalid-key')));
     assert.equal(captures, 0);
     client = new WebSocket(`ws://127.0.0.1:${port}`, { headers: { Authorization: 'Bearer ' + token } });
     const hello = message(client);
