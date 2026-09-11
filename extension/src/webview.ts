@@ -4,6 +4,8 @@ import { setWebviewPanel } from "./state/actions";
 import { handleChat } from "./ai/api";
 
 import { randomBytes } from "crypto";
+import { store } from "./state/store";
+import { connectionDetails } from "./connection";
 
 function getWebviewContent(): string {
   const nonce = randomBytes(24).toString("hex");
@@ -52,6 +54,10 @@ function getWebviewContent(): string {
             cursor: pointer;
             transition: background-color 0.3s ease;
         }
+        .connection-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+        button:disabled { opacity: 0.5; cursor: default; }
+        button:focus-visible { outline: 2px solid var(--vscode-focusBorder, #569cd6); outline-offset: 2px; }
+        .status-value { overflow-wrap: anywhere; }
         button:hover {
             background-color: #1177bb;
         }
@@ -112,17 +118,29 @@ function getWebviewContent(): string {
         <div class="logo">AirCodum</div>
         <div class="tagline">Airdrop for your Code</div>
         
-        <div class="status">
+        <h2>Connect your phone</h2>
+        <div class="status" aria-live="polite">
+            <div class="status-item"><span>Server:</span><span id="serverState" class="status-value"></span></div>
             <div class="status-item">
-                <span>IP Address:</span>
+                <span>Host:</span>
                 <span id="ipAddress" class="status-value"></span>
             </div>
             <div class="status-item">
                 <span>Port:</span>
-                <span class="status-value">11040</span>
+                <span id="serverPort" class="status-value"></span>
             </div>
         </div>
         
+        <p id="connectionHint"></p>
+        <p>On your phone, select <strong>Tailscale / localhost (ws)</strong> for a direct connection.
+        Connect Tailscale on both devices using the same account.</p>
+        <div class="connection-actions">
+            <button data-action="configureConnection">Choose connection</button>
+            <button data-action="copyPairingToken">Copy pairing key</button>
+            <button data-action="startServer">Start server</button>
+            <button data-action="stopServer">Stop server</button>
+        </div>
+        <p>The pairing key is required in the phone’s connection settings. Copy it here and paste it on your phone.</p>
         <div>
             <h2>OpenAI API Key</h2>
             <input type="password" id="apiKeyInput" placeholder="Enter your OpenAI API key">
@@ -160,7 +178,12 @@ function getWebviewContent(): string {
   
     <script nonce="${nonce}">
         const vscode = acquireVsCodeApi();
-        const actions = { saveApiKey, copyToClipboard, addToCurrentFile, chat };
+        const actions = { saveApiKey, copyToClipboard, addToCurrentFile, chat,
+          configureConnection: () => vscode.postMessage({command: 'configureConnection'}),
+          copyPairingToken: () => vscode.postMessage({command: 'copyPairingToken'}),
+          startServer: () => vscode.postMessage({command: 'startServer'}),
+          stopServer: () => vscode.postMessage({command: 'stopServer'}),
+        };
         document.querySelectorAll('[data-action]').forEach(button => {
           button.addEventListener('click', () => actions[button.dataset.action](button.dataset.target));
         });
@@ -222,8 +245,13 @@ function getWebviewContent(): string {
                 case 'chatResponse':
                     handleChatResponseMessage(message);
                     break;
-                case 'ipAddress':
-                    document.getElementById('ipAddress').textContent = message.ipAddress;
+                case 'connection':
+                    document.getElementById('ipAddress').textContent = message.host;
+                    document.getElementById('serverPort').textContent = String(message.port);
+                    document.getElementById('serverState').textContent = message.running ? 'Running' : 'Stopped';
+                    document.getElementById('connectionHint').textContent = message.hint;
+                    document.querySelector('[data-action="startServer"]').disabled = message.running;
+                    document.querySelector('[data-action="stopServer"]').disabled = !message.running;
                     break;
                 case 'error':
                     showError(message.message);
@@ -258,16 +286,14 @@ function getWebviewContent(): string {
             document.querySelectorAll('#chatContainer button').forEach(btn => btn.style.display = 'inline-block');
         }
   
-        // Request the API key when the webview loads
-        vscode.postMessage({ command: 'ipAddress' });
+        vscode.postMessage({ command: 'connection' });
     </script>
   </body>
   </html>`;
 }
 
 export function createWebviewPanel(
-  context: vscode.ExtensionContext,
-  address: string
+  context: vscode.ExtensionContext
 ) {
   const panel = vscode.window.createWebviewPanel(
     "AirCodum",
@@ -283,12 +309,17 @@ export function createWebviewPanel(
   panel.webview.html = getWebviewContent();
 
 
-  // Send the IP address to the webview
-  panel.webview.postMessage({ type: "ipAddress", ipAddress: address });
+  const sendConnection = () => {
+    const server = store.getState().server;
+    const configured = vscode.workspace.getConfiguration("aircodum").get<string>("bindAddress", "127.0.0.1");
+    panel.webview.postMessage({ type: "connection", ...connectionDetails(server, configured) });
+  };
+  const unsubscribe = store.subscribe(sendConnection);
 
   // Add this event listener
   panel.onDidDispose(
     () => {
+      unsubscribe();
       setWebviewPanel(null);
     },
     null,
@@ -302,8 +333,20 @@ export function createWebviewPanel(
         case "addToCurrentFile":
           addToCurrentFile(message.text);
           break;
-        case "ipAddress":
-          panel?.webview.postMessage({ type: "ipAddress", ipAddress: address });
+        case "connection":
+          sendConnection();
+          break;
+        case "configureConnection":
+          await vscode.commands.executeCommand("extension.configureAirCodumConnection");
+          break;
+        case "copyPairingToken":
+          await vscode.commands.executeCommand("extension.copyAirCodumPairingToken");
+          break;
+        case "startServer":
+          await vscode.commands.executeCommand("extension.startAirCodumServer");
+          break;
+        case "stopServer":
+          await vscode.commands.executeCommand("extension.stopAirCodumServer");
           break;
         case "saveApiKey":
           await saveApiKey(message.key);

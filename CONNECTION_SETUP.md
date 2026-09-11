@@ -1,3 +1,7 @@
+## Connect from the extension UI (0.2.2)
+
+Open **AirCodum** using **Open AirCodum Webview**. Under **Connect your phone**, use **Choose connection** and select the detected Tailscale address. This saves the address and starts the listener there. Connect Tailscale on both devices with the same account. Enter the displayed host and port in the phone app, choose **Tailscale / localhost (ws)**, and use **Copy pairing key** to transfer the key. The UI reports the active listener, even if the saved setting changes before restart. Start and stop controls remain available in the panel.
+
 # Connecting AirCodum to VS Code
 
 Use [AirCodum-Mobile](https://github.com/priyankark/AirCodum-Mobile), package `com.codeair`, with this extension. [AirCodum-Agnentum-Mobile](https://github.com/priyankark/AirCodum-Agnentum-Mobile) is the separate app for Agentum CLI.

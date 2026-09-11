@@ -19,30 +19,48 @@
 import * as vscode from "vscode";
 import { initializeSecrets, getPairingToken } from "./ai/utils";
 import { store } from "./state/store";
-import {
-  setServerAddress,
-  setServerRunning,
-} from "./state/actions";
 import { startServer, stopServer } from "./server";
 import { createWebviewPanel } from "./webview";
+import { networkInterfaces } from "os";
+import { tailscaleAddresses } from "./connection";
 
 export async function activate(context: vscode.ExtensionContext) {
   await initializeSecrets(context);
 
-  const startServerAndWebview = async () => {
-    if (store.getState().server.isRunning) {
-      vscode.window.showInformationMessage(
-        "AirCodum server is already running."
-      );
-      return;
-    }
-
-    const address = vscode.workspace.getConfiguration("aircodum").get<string>("bindAddress", "127.0.0.1");
-    await startServer(address, await getPairingToken());
-    setServerRunning(true);
-    setServerAddress(address);
-    createWebviewPanel(context, address);
+  const showPanel = () => {
+    const { webview } = store.getState();
+    if (webview.panel) webview.panel.reveal();
+    else createWebviewPanel(context);
   };
+
+  const startServerAndWebview = async () => {
+    showPanel();
+    if (store.getState().server.isRunning) return;
+    try {
+      const address = vscode.workspace.getConfiguration("aircodum").get<string>("bindAddress", "127.0.0.1");
+      await startServer(address, await getPairingToken());
+    } catch (error) {
+      vscode.window.showErrorMessage(`AirCodum could not start: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
+  context.subscriptions.push(vscode.commands.registerCommand("extension.configureAirCodumConnection", async () => {
+    const addresses = tailscaleAddresses(networkInterfaces());
+    const choices = addresses.map(address => ({ label: "Tailscale", description: address, address }));
+    choices.push({ label: "Localhost", description: "This Mac only, or a local TLS proxy", address: "127.0.0.1" });
+    const choice = await vscode.window.showQuickPick(choices, {
+      title: "AirCodum connection",
+      placeHolder: addresses.length ? "Choose the address your phone will connect to" : "No Tailscale address found. Connect Tailscale on this Mac, then try again.",
+    });
+    if (!choice) return;
+    try {
+      await vscode.workspace.getConfiguration("aircodum").update("bindAddress", choice.address, vscode.ConfigurationTarget.Global);
+      stopServer();
+      await startServerAndWebview();
+    } catch (error) {
+      vscode.window.showErrorMessage(`AirCodum connection failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }));
 
   const startServerCommand = vscode.commands.registerCommand(
     "extension.startAirCodumServer",
@@ -59,7 +77,7 @@ export async function activate(context: vscode.ExtensionContext) {
         if (!server.isRunning) {
           await startServerAndWebview();
         } else {
-          createWebviewPanel(context, server.address!);
+          createWebviewPanel(context);
         }
       }
     }
