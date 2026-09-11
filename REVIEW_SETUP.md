@@ -94,4 +94,4 @@ set VS Code's `aircodum.bindAddress` to the computer's Tailscale IP **before**
 starting the server, and use that IP, port 11040, the copied token, and
 **Tailscale / localhost (ws)** in the app. A public TLS reverse proxy can also
 forward to the loopback server; select **TLS (wss)** and its trusted hostname/port.
-Do not use a plain public/LAN WebSocket address. See [connection setup](CONNECTION_SETUP.md).
+With extension 0.2.6 and mobile 2.4.2, you can instead choose Local Wi-Fi / Ethernet and connect using the displayed private LAN IP on the same network. Local traffic is unencrypted and intended for trusted networks. Public plaintext addresses remain blocked. See [connection setup](CONNECTION_SETUP.md).

@@ -157,16 +157,10 @@ Tailscale enables secure remote access to your AirCodum server from anywhere:
    - Sign in on both devices
    - They will automatically connect to your Tailscale network
 
-3. Configure AirCodum with Tailscale:
-   ```bash
-   tailscale serve 11040  # Or your configured AirCodum port
-   ```
+3. In AirCodum’s connection settings, choose the detected **Tailscale** address. The extension starts on that interface.
+4. Scan its pairing QR code, or enter the displayed Tailscale IP, port 11040 and pairing key on the phone. Choose **Tailscale** in the app. Use a hostname only with your configured TLS proxy and **Custom TLS server**.
 
-4. Connect from your mobile device:
-   - Use your computer's Tailscale IP or MagicDNS hostname
-   - Example: `your-computer.tail-scale.ts.net:11040`
-
-**Security Note**: While Tailscale provides secure connectivity, only use remote access over trusted networks for optimal security.
+For devices on the same trusted local network, choose **Local Wi-Fi / Ethernet** instead. This requires mobile 2.4.2 and uses unencrypted traffic; Tailscale is optional. See [connection setup](CONNECTION_SETUP.md).
 
 ## Command Reference
 

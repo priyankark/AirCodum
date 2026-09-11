@@ -68,3 +68,7 @@ Automatic capability selection and the remaining authentication migration bounda
 ## Original VS Code mobile app
 
 The primary companion is [AirCodum-Mobile](https://github.com/priyankark/AirCodum-Mobile), package `com.codeair`; Agentum is a separate app. The original app retains its command/file interface and receives the pairing, capability, keyboard and frame changes. Its Expo 51 stack now uses patched tar 7 with an explicit Expo CLI compatibility patch; prebuild and the actual JavaScript extraction fallback pass. See the original mobile validation and dependency reports for native evidence, local mitigations and remaining scope.
+
+## September 11 LAN compatibility update
+
+AirCodum extension 0.2.6 and mobile 2.4.2 restore explicit private IPv4 LAN connections, including the mobile HTTP code-server path. This is an unencrypted option for trusted local networks. Pairing remains mandatory for the AirCodum listener, and public/wildcard listeners remain rejected. Tailscale and custom TLS are still supported. This exception supersedes the AirCodum LAN restriction in the original review table; it does not change the separate Agentum services.
