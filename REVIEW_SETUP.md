@@ -13,17 +13,16 @@ registration, or one-time login code. Desktop setup is required.
 - [AirCodum: Control VS Code right from your phone!](https://youtu.be/HXtH_NYY2Lc)
   — the demo linked in the extension documentation.
 
-The steps below describe the current 2.4.0 app / 0.2.0 extension pairing process.
+The steps below describe the current 2.4.0 app / 0.2.1 extension pairing process.
 
 ## Install the published extension
 
 1. Install [Visual Studio Code](https://code.visualstudio.com/) on a computer.
 2. Open Extensions and search for `priyankark.aircodum-app`, or open its
    [published Marketplace page](https://marketplace.visualstudio.com/items?itemName=priyankark.aircodum-app).
-3. Select **Install Pre-Release Version**, or **Switch to Pre-Release Version**
-   if already installed. Confirm extension version **0.2.0**. The stable channel
-   remains 0.1.11 and does not provide the new pairing commands.
-   Alternatively, install the [published 0.2.0 VSIX](https://github.com/priyankark/AirCodum/releases/tag/v0.2.0)
+3. Select **Install** or update the extension. Confirm stable version **0.2.1**.
+   If using the pre-release channel, **Switch to Release Version** is also available.
+   Alternatively, install the [published 0.2.1 VSIX](https://github.com/priyankark/AirCodum/releases/tag/v0.2.1)
    using **Extensions: Install from VSIX**.
 4. Open a disposable folder in VS Code and trust that folder. Create and open
    `review.txt` containing sample text. Keep VS Code and that editor in front
@@ -95,4 +94,4 @@ set VS Code's `aircodum.bindAddress` to the computer's Tailscale IP **before**
 starting the server, and use that IP, port 11040, the copied token, and
 **Tailscale / localhost (ws)** in the app. A public TLS reverse proxy can also
 forward to the loopback server; select **TLS (wss)** and its trusted hostname/port.
-Do not use a plain public/LAN WebSocket address. See [connection setup](CONNECTION_SETUP.md).
+With extension 0.2.6 and mobile 2.4.2, you can instead choose Local Wi-Fi / Ethernet and connect using the displayed private LAN IP on the same network. Local traffic is unencrypted and intended for trusted networks. Public plaintext addresses remain blocked. See [connection setup](CONNECTION_SETUP.md).

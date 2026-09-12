@@ -6,7 +6,7 @@ No rollout flags or server version selection are needed. On each connection, a n
 
 An old extension sends no announcement. The app keeps the original `mouse-event` and `keyboard-event` wire format and never sends new JSON commands that old extensions could mistake for uploads. Its text composer requires the updated extension. Legacy automatic screen capture remains a server limitation.
 
-An empty pairing field supports old servers on loopback/Tailscale or TLS. A supplied token is always sent; HTTP 401/403 stops retries and shows pairing instructions. The app never retries anonymously after a rejected token. New servers require the pairing token from the VS Code command **AirCodum: Copy Pairing Token**. It is saved in native SecureStore.
+An empty pairing field supports old servers on loopback/Tailscale or TLS, and on private LAN IPv4 with mobile 2.4.2. A supplied token is always sent; HTTP 401/403 stops retries and shows pairing instructions. The app never retries anonymously after a rejected token. New servers require the pairing token from the VS Code command **AirCodum: Copy Pairing Token**. It is saved in native SecureStore.
 
 | App | Extension | Behavior |
 | --- | --- | --- |

@@ -48,3 +48,15 @@ export function protectedBind(host: string): boolean {
   const octets = host.split('.').map(Number);
   return require('net').isIP(host) === 4 && (octets[0] === 127 || (octets[0] === 100 && octets[1] >= 64 && octets[1] <= 127));
 }
+
+/** RFC 1918 IPv4 only: never wildcard, public, link-local or ambiguous numeric hosts. */
+export function localNetworkAddress(host: string): boolean {
+  if (require('net').isIP(host) !== 4) return false;
+  const [a, b] = host.split('.').map(Number);
+  return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
+}
+
+/** The user chooses a single interface; local Wi-Fi retains pairing authentication. */
+export function allowedBind(host: string): boolean {
+  return protectedBind(host) || localNetworkAddress(host);
+}

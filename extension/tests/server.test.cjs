@@ -4,10 +4,11 @@ const { once } = require('node:events');
 const Module = require('node:module');
 const { WebSocket } = require('ws');
 let captures = 0, uploads = 0, taps = [], typed = [], modifiers = [];
+const connectionEvents = [];
 const native = { getScreenSize: () => ({ width: 1440, height: 900 }), keyTap: (key, held = []) => { taps.push(key); modifiers = held; }, keyToggle: key => { modifiers = modifiers.filter(m => m !== key); }, moveMouse() {}, mouseToggle() {}, typeString(text) { if (!modifiers.length) typed.push(text); } };
 const originalLoad = Module._load;
 Module._load = function(name, ...args) {
-  if (name === 'vscode') return { workspace: { isTrusted: true }, window: { showInformationMessage() {} } };
+  if (name === 'vscode') return { workspace: { isTrusted: true }, window: { showInformationMessage() {}, createOutputChannel() { return { appendLine: line => connectionEvents.push(line), dispose() {} }; } } };
   if (name === './commanding/robotjs-handlers') return { typedRobot: native };
   if (name === './native-capture') return { capturePrimaryScreen: async () => { captures++; return Buffer.alloc(4096); }, nativeResizeJpeg: async () => null };
   if (name === './jimp') return { createImage: async () => ({ width: 1440, height: 900, getBuffer: async () => Buffer.from('frame') }) };
@@ -17,12 +18,18 @@ Module._load = function(name, ...args) {
 };
 const { startServer, stopServer } = require('../src/server.ts');
 const { store } = require('../src/state/store.ts');
+require('../src/connection-log.ts').initializeConnectionLog({ subscriptions: [] });
 Module._load = originalLoad;
 const token = 'c'.repeat(64);
 const message = socket => once(socket, 'message').then(([data]) => JSON.parse(data.toString()));
 test('extension requires pairing, streams only on demand, rejects malformed text and releases listener', async () => {
   store.setState({ server: { port: 0, isRunning: false, address: null } });
   await assert.rejects(startServer('0.0.0.0', token));
+  const occupied = require('net').createServer(); occupied.listen(0, '127.0.0.1'); await once(occupied, 'listening');
+  store.setState({ server: { port: occupied.address().port, isRunning: false, address: null } });
+  await assert.rejects(startServer('127.0.0.1', token), /EADDRINUSE/);
+  await new Promise(resolve => occupied.close(resolve));
+  store.setState({ server: { port: 0, isRunning: false, address: null } });
   await startServer('127.0.0.1', token);
   const wss = store.getState().websocket.wss;
   const port = wss.address().port;
@@ -30,6 +37,16 @@ test('extension requires pairing, streams only on demand, rejects malformed text
   try {
     const bad = new WebSocket(`ws://127.0.0.1:${port}`);
     await new Promise(resolve => bad.on('error', resolve));
+    const wrong = new WebSocket(`ws://127.0.0.1:${port}`, { headers: { Authorization: 'Bearer sensitive-invalid-key' } });
+    await new Promise(resolve => wrong.on('error', resolve));
+    const tls = require('net').connect(port, '127.0.0.1');
+    await once(tls, 'connect');
+    tls.write(Buffer.from([0x16, 0x03, 0x01, 0, 0]));
+    await once(tls, 'close');
+    assert.ok(connectionEvents.some(line => line.includes('missing pairing key')));
+    assert.ok(connectionEvents.some(line => line.includes('incorrect pairing key')));
+    assert.ok(connectionEvents.some(line => line.includes('TLS requested on plain WebSocket port')));
+    assert.ok(connectionEvents.every(line => !line.includes(token) && !line.includes('sensitive-invalid-key')));
     assert.equal(captures, 0);
     client = new WebSocket(`ws://127.0.0.1:${port}`, { headers: { Authorization: 'Bearer ' + token } });
     const hello = message(client);
@@ -40,6 +57,9 @@ test('extension requires pairing, streams only on demand, rejects malformed text
     assert.equal(capabilities.features.pty, false);
     assert.deepEqual(capabilities.features.agents, []);
     assert.equal(captures, 0);
+    assert.equal(capabilities.features.heartbeat, true);
+    const pong = message(client); client.send(JSON.stringify({type: 'ping'}));
+    assert.equal((await pong).type, 'pong');
     const rejected = message(client); client.send('{broken');
     assert.equal((await rejected).type, 'error'); assert.equal(uploads, 0);
     const frame = message(client); client.send(JSON.stringify({ type: 'vnc_start' }));

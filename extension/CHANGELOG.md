@@ -1,3 +1,31 @@
+## 0.2.6
+
+- Restored same-network connections without Tailscale: choose Local Wi-Fi / Ethernet, then scan the QR code or enter details manually using mobile 2.4.2.
+- Explain local-network requirements and unencrypted traffic while keeping pairing mandatory and public/wildcard listeners blocked.
+
+## 0.2.5
+
+- Reorganized the panel into Connection and Files & AI, with QR/manual pairing tabs and one main connection action.
+- Grouped address, server, keep-awake and troubleshooting controls in a collapsible settings section.
+- Added active connection status, accessible keyboard navigation, and responsive styling that follows the VS Code theme.
+- Kept optional AI setup out of phone pairing.
+
+
+- Added AirCodum Connections output logs for pairing failures, TLS mismatches and disconnect codes. Pairing keys and message contents are excluded.
+
+## 0.2.3
+
+- Added QR pairing with AirCodum mobile 2.4.1; manual connection controls remain available.
+- Added Keep Mac awake while the server runs, with guidance for supported closed-display use.
+- Added heartbeat support and removal of stale connections after sleep or network interruption.
+
+## 0.2.2
+
+- Added connection controls showing the active host, port, and server status.
+- Added Copy pairing key and a detected Tailscale address selector.
+- Keep connection controls available when the server stops or fails to start.
+- Explain when localhost cannot be reached directly from a phone.
+
 # Changelog
 
 ## 0.2.0 (pre-release)

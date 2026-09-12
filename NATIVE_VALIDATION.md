@@ -47,3 +47,22 @@ Android used a universal emulator APK derived from the production AirCodum-Mobil
 The opt-in host setting `AIRCODUM_E2E_FOCUS_HOLD_MS=10000` keeps only its isolated VS Code process in front for up to ten seconds after focus requests during automation. Keep macOS awake and reserve the desktop for these tests. Mobile drivers also wake Android, reject stale UI hierarchies and pace native XCTest typing. These test-driver changes do not change the released extension runtime.
 
 VSIX SHA-256: `2817f4d109d8edd58c9819c77bf6c0e0e2105dc1da070e62c3d07ef893167c9e`. Full release/build/submission status is tracked in AirCodum-Mobile's STORE_RELEASE.md. Physical devices, production TLS/Tailscale, Windows/Linux and camera/file-picker/voice/AI flows remain outside this validation.
+
+## GA promotion — September 10, 2026
+
+Version 0.2.1 promotes the tested 0.2.0 runtime to the stable Marketplace channel
+after iOS AirCodum 2.4.0 reached READY_FOR_SALE. Android build 28 remains in review.
+Marketplace requires different version numbers for pre-release and stable builds.
+The GA VSIX was made from the verified original VSIX, preserving each ZIP entry's
+metadata and bytes except `extension/package.json` (version 0.2.0 → 0.2.1) and
+`extension.vsixmanifest` (version increment and removal of PreRelease=true).
+Comparison of all 14 entries confirmed that every runtime file, including bundled
+JavaScript and all native modules, is byte-identical. This promotion does not
+represent another native mobile E2E run; the runtime coverage above applies.
+
+GA VSIX SHA-256: `831d840500ab6c07b862296f223490f8e8f5a2824a05ff3e4cb748f20d099cf6`.
+
+The public Marketplace catalog confirmed 0.2.1 without the PreRelease property.
+The downloaded Marketplace package matched the GA SHA-256 after HTTP gzip
+decoding. A fresh isolated VS Code 1.121.0 profile installed
+`priyankark.aircodum-app` as 0.2.1 without `--pre-release` or a pinned version.
