@@ -3,7 +3,7 @@ import { WebSocketServer } from "ws";
 import * as vscode from "vscode";
 import { handleWebSocketConnection } from "./websockets";
 import { store } from "./state/store";
-import { setServerRunning, setWebSocketServer } from "./state/actions";
+import { setServerAddress, setServerRunning, setWebSocketServer } from "./state/actions";
 import { authorized, MAX_PAYLOAD, protectedBind } from "./security";
 
 let listener: http.Server | undefined;
@@ -28,6 +28,7 @@ export async function startServer(address: string, token: string): Promise<void>
       httpServer.listen(store.getState().server.port, address, () => {
         httpServer.removeListener("error", reject);
         httpServer.on("error", () => stopServer());
+        setServerAddress(address);
         setServerRunning(true);
         setWebSocketServer(wss);
         resolve();
@@ -41,11 +42,10 @@ export async function startServer(address: string, token: string): Promise<void>
 }
 
 export function stopServer(): void {
-  const { websocket, webview } = store.getState();
+  const { websocket } = store.getState();
   for (const client of websocket.wss?.clients ?? []) client.terminate();
   websocket.wss?.close();
   listener?.close(); listener = undefined;
   setWebSocketServer(null);
   setServerRunning(false);
-  webview.panel?.dispose();
 }

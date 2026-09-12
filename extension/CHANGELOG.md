@@ -1,3 +1,10 @@
+## 0.2.2
+
+- Added connection controls showing the active host, port, and server status.
+- Added Copy pairing key and a detected Tailscale address selector.
+- Keep connection controls available when the server stops or fails to start.
+- Explain when localhost cannot be reached directly from a phone.
+
 # Changelog
 
 ## 0.2.0 (pre-release)

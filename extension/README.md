@@ -1,3 +1,7 @@
+## Connect your phone
+
+Open **AirCodum Webview** and use **Choose connection** to select the Mac’s Tailscale address. The panel shows the active host, port, and server status. Use **Copy pairing key** and paste the key in the mobile connection settings. Start and stop the listener from the same panel.
+
 # AirCodum: Smartphone powered Remote Control for VS Code
 
 ## Table of Contents
