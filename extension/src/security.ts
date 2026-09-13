@@ -28,9 +28,17 @@ export function messageBudget() {
 
 export function validMouse(data: any): boolean {
   return data && ['down', 'up', 'move'].includes(data.eventType) &&
+    (data.button === undefined || data.button === 'left' || data.button === 'right') &&
     [data.x, data.y, data.screenWidth, data.screenHeight].every(Number.isFinite) &&
     data.screenWidth > 0 && data.screenHeight > 0 && data.x >= 0 && data.y >= 0 &&
     data.x <= data.screenWidth && data.y <= data.screenHeight;
+}
+
+/** Wheel units are bounded before reaching the native input driver. */
+export function validScroll(data: any): boolean {
+  return validMouse({ ...data, eventType: 'move' }) &&
+    [data.deltaX, data.deltaY].every(value => Number.isInteger(value) && Math.abs(value) <= 120) &&
+    (data.deltaX !== 0 || data.deltaY !== 0);
 }
 
 export function validKey(data: any): boolean {

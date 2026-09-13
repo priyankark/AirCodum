@@ -11,8 +11,10 @@ import {
   removeWebSocketConnection,
 } from "./state/actions";
 import crypto from "crypto";
-import { messageBudget, validKey, validMouse } from "./security";
+import { messageBudget, validKey, validMouse, validScroll } from "./security";
 import { getApiKey } from "./ai/utils";
+import { nativeScrollDelta } from './vnc-input';
+import { getInstance } from './instance';
 
 import { Commands } from "./commanding/commands";
 import jimp from "./jimp";
@@ -131,6 +133,11 @@ export class ScreenCaptureManager {
         const hash = crypto.createHash('sha256').update(raw).digest('hex');
         // Periodic refresh allows a slow/new subscriber to recover on an idle desktop.
         if (hash !== this.lastFrameHash || Date.now() - this.lastRefresh >= 1000) {
+          const screenSize = robot.getScreenSize();
+          if (screenSize.width !== this.screenSize.width || screenSize.height !== this.screenSize.height) {
+            this.screenSize = screenSize;
+            this.cachedDimensions = this.getScaledDimensions();
+          }
           const dimensions = { ...this.cachedDimensions };
           const frame = await this.processFrame(raw, dimensions);
           if (!active()) return;
@@ -322,7 +329,7 @@ export class ScreenCaptureManager {
 class VSCodeVNCConnection {
   private unsubscribe: (() => void) | null = null;
   private screenSize = robot.getScreenSize();
-  private mouseDown = false;
+  private heldButtons = new Set<string>();
 
   constructor(private ws: WebSocket) {
     this.setupWebSocketHandlers();
@@ -357,6 +364,10 @@ class VSCodeVNCConnection {
           case 'mouse-event': case 'vnc_mouse_event':
             if (!validMouse(data)) throw new Error('Invalid mouse event');
             await this.handleMouseEvent(data); break;
+          case 'vnc_scroll':
+            if (!validScroll(data)) throw new Error('Invalid scroll event');
+            this.movePointer(data);
+            robot.scrollMouse(nativeScrollDelta(data.deltaX), nativeScrollDelta(data.deltaY)); break;
           case 'keyboard-event': case 'vnc_keyboard_event':
             if (!validKey(data)) throw new Error('Invalid key event');
             await this.handleKeyboardEvent(data); break;
@@ -409,24 +420,28 @@ class VSCodeVNCConnection {
     return { width, height };
   }
 
+  private movePointer(data: any) {
+    // Refresh after display changes and clamp the far edge to a real pixel.
+    this.screenSize = robot.getScreenSize();
+    const x = Math.min(this.screenSize.width - 1, Math.floor(data.x / data.screenWidth * this.screenSize.width));
+    const y = Math.min(this.screenSize.height - 1, Math.floor(data.y / data.screenHeight * this.screenSize.height));
+    robot.moveMouse(Math.max(0, x), Math.max(0, y));
+  }
+
   private async handleMouseEvent(data: any) {
     try {
-      const { x, y, eventType, screenWidth, screenHeight } = data;
-
-      // Convert from client space to actual screen coordinates
-      const actualX = Math.floor((x / screenWidth) * this.screenSize.width);
-      const actualY = Math.floor((y / screenHeight) * this.screenSize.height);
-
-      robot.moveMouse(actualX, actualY);
+      const { eventType } = data;
+      const button = data.button ?? 'left';
+      this.movePointer(data);
 
       switch (eventType) {
         case "down":
-          robot.mouseToggle("down", "left");
-          this.mouseDown = true;
+          robot.mouseToggle("down", button);
+          this.heldButtons.add(button);
           break;
         case "up":
-          robot.mouseToggle("up", "left");
-          this.mouseDown = false;
+          robot.mouseToggle("up", button);
+          this.heldButtons.delete(button);
           break;
         case "move":
           // Already moved above
@@ -471,10 +486,10 @@ class VSCodeVNCConnection {
   }
 
   public dispose() {
-    if (this.mouseDown) {
-      try { robot.mouseToggle("up", "left"); } catch {}
-      this.mouseDown = false;
+    for (const button of this.heldButtons) {
+      try { robot.mouseToggle("up", button); } catch {}
     }
+    this.heldButtons.clear();
     // Unsubscribe from frame updates
     if (this.unsubscribe) {
       this.unsubscribe();
@@ -487,9 +502,9 @@ class VSCodeVNCConnection {
 export function handleWebSocketConnection(ws: WebSocket) {
   console.log("New WebSocket connection");
   addWebSocketConnection(ws);
-  ws.send(JSON.stringify({ type: 'server_capabilities', protocolVersion: 1,
+  ws.send(JSON.stringify({ type: 'server_capabilities', protocolVersion: 1, instance: getInstance(),
     features: { agents: [], pty: false, vnc: true, vncSharedPort: true, heartbeat: true,
-      vncStreamControl: true, vncTextInput: true } }));
+      vncStreamControl: true, vncTextInput: true, vncScroll: true, vncRightClick: true } }));
 
   // Create a connection instance for this socket
   const vncConnection = new VSCodeVNCConnection(ws);

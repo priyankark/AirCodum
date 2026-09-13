@@ -2,7 +2,7 @@
   "name": "aircodum-app",
   "displayName": "AirCodum: Smartphone based Remote Control for VS Code",
   "description": "Smartphone based Remote Control for VS Code. Control IDE actions, send files and images, get AI assistance and more, right from your smartphone.",
-  "version": "0.2.6",
+  "version": "0.3.0",
   "publisher": "priyankark",
   "repository": "https://github.com/priyankark/AirCodum",
   "engines": {
@@ -43,6 +43,14 @@
       {
         "command": "extension.toggleAirCodumKeepAwake",
         "title": "AirCodum: Toggle Keep Mac Awake"
+      },
+      {
+        "command": "extension.renameAirCodumInstance",
+        "title": "AirCodum: Rename Workspace Connection"
+      },
+      {
+        "command": "extension.configureAirCodumPort",
+        "title": "AirCodum: Change Connection Port"
       }
     ],
     "configuration": {
@@ -59,6 +67,14 @@
           "default": false,
           "scope": "application",
           "description": "On macOS, prevent idle sleep while the AirCodum server runs. Does not override lid-close sleep; supported closed-display use requires power and an external display."
+        },
+        "aircodum.port": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 65535,
+          "scope": "window",
+          "description": "0 automatically chooses and remembers an available port for this workspace, starting at 11040. Set 1024–65535 for an exact port; each active VS Code window needs a different port."
         }
       }
     }
@@ -76,6 +92,7 @@
   "devDependencies": {
     "@types/jimp": "^0.2.1",
     "@types/node": "^18",
+    "@types/proper-lockfile": "^4.1.4",
     "@types/qrcode": "^1.5.6",
     "@types/vscode": "^1.73.0",
     "@types/ws": "^8.5.12",
@@ -98,6 +115,7 @@
     "node-fetch": "^2.7.0",
     "node-webp": "^1.0.2",
     "openai": "^4.67.0",
+    "proper-lockfile": "^4.1.2",
     "qrcode": "^1.5.4",
     "screenshot-desktop": "^1.15.2",
     "ws": "^8.18.0"

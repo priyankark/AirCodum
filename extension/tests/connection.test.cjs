@@ -54,3 +54,14 @@ test('pairing image decodes to the complete versioned phone connection', async (
  assert.deepEqual(JSON.parse(decoded.data),{type:'aircodum-pairing',version:1,host:'100.89.59.102',port:11040,tls:false,token});
  for(const state of [{isRunning:false,address:'100.89.59.102',port:11040},{isRunning:true,address:'127.0.0.1',port:11040}]) assert.throws(()=>pairingCode(state,token));
 });
+
+test('named instance QR remains v1 compatible and uses the actual alternate listener port', async () => {
+  const payload = pairingCode({ isRunning: true, address: '192.168.1.2', port: 11043 }, 'd'.repeat(64), { id: 'a'.repeat(32), name: 'Laptop · Client UI', sharedDesktop: true });
+  const png = PNG.sync.read(await QRCode.toBuffer(payload, { width: 640, margin: 4, errorCorrectionLevel: 'M' }));
+  const decoded = jsQR(new Uint8ClampedArray(png.data), png.width, png.height);
+  const pairing = JSON.parse(decoded.data);
+  assert.equal(pairing.version, 1);
+  assert.equal(pairing.port, 11043);
+  assert.equal(pairing.instanceId, 'a'.repeat(32));
+  assert.equal(pairing.instanceName, 'Laptop · Client UI');
+});

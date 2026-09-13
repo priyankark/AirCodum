@@ -1,3 +1,4 @@
+import type { InstanceInfo } from "./instance";
 import type { NetworkInterfaceInfo } from "os";
 import { protectedBind, allowedBind, localNetworkAddress } from "./security";
 
@@ -24,12 +25,12 @@ export function connectionDetails(server: { isRunning: boolean; address: string 
   };
 }
 
-export function pairingCode(server: { isRunning: boolean; address: string | null; port: number }, token: string): string {
+export function pairingCode(server: { isRunning: boolean; address: string | null; port: number }, token: string, instance?: InstanceInfo): string {
   if (!server.isRunning || !server.address) throw new Error('Start the server before showing a pairing code.');
   const host = server.address;
   if (host === 'localhost' || host === '::1' || host.startsWith('127.')) {
     throw new Error('Choose a local Wi-Fi or Tailscale address first so your phone can reach this computer.');
   }
   if (!allowedBind(host) || !/^[a-zA-Z0-9_-]{32,256}$/.test(token)) throw new Error('Invalid pairing settings.');
-  return JSON.stringify({ type: 'aircodum-pairing', version: 1, host: host.includes(':') ? `[${host}]` : host, port: server.port, tls: false, token });
+  return JSON.stringify({ type: 'aircodum-pairing', version: 1, host: host.includes(':') ? `[${host}]` : host, port: server.port, tls: false, token, ...(instance ? { instanceId: instance.id, instanceName: instance.name } : {}) });
 }

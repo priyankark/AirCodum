@@ -17,18 +17,21 @@
  */
 
 import * as vscode from "vscode";
-import { initializeSecrets, getPairingToken } from "./ai/utils";
+import { initializeSecrets, getPairingToken, resolvePairingToken } from "./ai/utils";
 import { store } from "./state/store";
 import { startServer, stopServer } from "./server";
 import { createWebviewPanel } from "./webview";
 import { KeepAwake } from "./keep-awake";
 import { networkInterfaces } from "os";
 import { tailscaleAddresses, localNetworkAddresses } from "./connection";
+import { DEFAULT_PORT, getInstance, initializeInstance, preferredPort, rememberPort, renameInstance, validPort } from './instance';
 import { initializeConnectionLog } from './connection-log';
 
 export async function activate(context: vscode.ExtensionContext) {
   initializeConnectionLog(context);
-  await initializeSecrets(context);
+  const workspaceIdentity = vscode.workspace.workspaceFile?.toString() || vscode.workspace.workspaceFolders?.map(folder => folder.uri.toString()).sort().join('|') || context.storageUri?.toString();
+  const workspaceId = await initializeInstance(context, vscode.workspace.name, workspaceIdentity ? `${vscode.env.machineId}:${workspaceIdentity}` : undefined);
+  await initializeSecrets(context, workspaceId);
   const updatePowerStatus = () => store.getState().webview.panel?.webview.postMessage({ type: 'power', active: keepAwake.active, enabled: vscode.workspace.getConfiguration('aircodum').get<boolean>('keepAwake', false) });
   const keepAwake = new KeepAwake(updatePowerStatus, message => { vscode.window.showErrorMessage(message); });
   const syncPower = () => keepAwake.update(vscode.workspace.getConfiguration('aircodum').get<boolean>('keepAwake', false), store.getState().server.isRunning);
@@ -53,7 +56,11 @@ export async function activate(context: vscode.ExtensionContext) {
     if (store.getState().server.isRunning) return;
     try {
       const address = vscode.workspace.getConfiguration("aircodum").get<string>("bindAddress", "127.0.0.1");
-      await startServer(address, await getPairingToken());
+      const configuredPort = vscode.workspace.getConfiguration("aircodum").get<number>("port", 0);
+      await startServer(address, await getPairingToken(DEFAULT_PORT), {
+        port: configuredPort || preferredPort(), autoPort: configuredPort === 0, pairingTokenForPort: resolvePairingToken,
+      });
+      await rememberPort(store.getState().server.port);
     } catch (error) {
       vscode.window.showErrorMessage(`AirCodum could not start: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -80,6 +87,19 @@ export async function activate(context: vscode.ExtensionContext) {
     } catch (error) {
       vscode.window.showErrorMessage(`AirCodum connection failed: ${error instanceof Error ? error.message : String(error)}`);
     }
+  }));
+
+  context.subscriptions.push(vscode.commands.registerCommand('extension.renameAirCodumInstance', async () => {
+    const name = await vscode.window.showInputBox({ title: 'Name this workspace', prompt: 'Shown on your phone so you can tell your connections apart.', value: getInstance().name, validateInput: value => value.trim() && value.trim().length <= 80 ? undefined : 'Enter a name up to 80 characters.' });
+    if (name !== undefined) await renameInstance(name);
+  }));
+  context.subscriptions.push(vscode.commands.registerCommand('extension.configureAirCodumPort', async () => {
+    const configured = vscode.workspace.getConfiguration('aircodum').get<number>('port', 0);
+    const value = await vscode.window.showInputBox({ title: 'Connection port', prompt: 'Use 0 for automatic selection. Each VS Code window needs its own available port. Changing it disconnects this window’s phones.', value: String(configured), validateInput: value => /^\d+$/.test(value) && (Number(value) === 0 || validPort(Number(value))) ? undefined : 'Enter 0 for automatic, or a port from 1024 to 65535.' });
+    if (value === undefined || Number(value) === configured) return;
+    await vscode.workspace.getConfiguration('aircodum').update('port', Number(value), vscode.workspace.workspaceFolders?.length ? vscode.ConfigurationTarget.Workspace : vscode.ConfigurationTarget.Global);
+    stopServer();
+    await startServerAndWebview();
   }));
 
   const startServerCommand = vscode.commands.registerCommand(
@@ -119,6 +139,7 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.window.showInformationMessage("Pairing token copied. Paste it into the mobile connection settings.");
   }));
 
+  return { getConnectionInfo: () => ({ ...store.getState().server, instance: getInstance() }) };
 }
 
 export function deactivate() { stopServer(); }

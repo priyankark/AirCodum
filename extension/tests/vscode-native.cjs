@@ -29,7 +29,9 @@ exports.run = async () => {
   const token = await vscode.env.clipboard.readText();
   assert.match(token, /^[a-f0-9]{64}$/);
   await vscode.env.clipboard.writeText(clipboard);
-  const url = 'ws://127.0.0.1:11040';
+  const info = extension.exports.getConnectionInfo?.() || { port: 11040 };
+  const port = info.port ?? info.server?.port ?? 11040;
+  const url = `ws://127.0.0.1:${port}`;
   const bad = new WebSocket(url);
   await new Promise(resolve => bad.once('error', resolve));
   const socket = new WebSocket(url, { headers: { Authorization: `Bearer ${token}`, Origin: 'aircodum://native' } });
@@ -43,6 +45,7 @@ exports.run = async () => {
   const filePath = path.join(directory, 'workspace', 'native-editor.txt');
   fs.writeFileSync(filePath, 'fixture');
   const document = await vscode.workspace.openTextDocument(filePath);
+  await vscode.window.showTextDocument(document, { preserveFocus: true });
   let focusGuard;
   const holdFocus = pid => {
     clearInterval(focusGuard);
@@ -90,7 +93,7 @@ exports.run = async () => {
   const snapshot = () => write('editor-state.json', { text: document.getText(), dirty: document.isDirty });
   const subscription = vscode.workspace.onDidChangeTextDocument(event => { if (event.document === document) snapshot(); });
   snapshot();
-  write('ready.json', { mode, token, port: 11040, filePath, vscodeVersion: vscode.version,
+  write('ready.json', { mode, token, port, instance: info.instance, filePath, vscodeVersion: vscode.version,
     checks: ['real extension activated', 'real webview opened', 'SecretStorage pairing command', 'anonymous upgrade rejected',
       'capabilities announced', ...(!transportOnly ? ['capture only on demand', 'VS Code Select All/Move Cursor commands', 'native JPEG captured'] : [])] });
   let lastId;
@@ -107,6 +110,22 @@ exports.run = async () => {
             if (request.action === 'focus') await focus();
             else if (request.action === 'assertSelection') assert.equal(document.getText(vscode.window.activeTextEditor.selection), request.text);
             else if (request.action === 'assertText') assert.equal(document.getText(), request.text);
+            else if (request.action === 'prepareScroll') {
+              const edit = new vscode.WorkspaceEdit();
+              edit.replace(document.uri, new vscode.Range(document.positionAt(0), document.positionAt(document.getText().length)),
+                Array.from({length: 400}, (_, i) => `AirCodum scroll fixture line ${i + 1}`).join('\n'));
+              await vscode.workspace.applyEdit(edit);
+              await focus();
+              vscode.window.activeTextEditor.revealRange(new vscode.Range(0, 0, 0, 0), vscode.TextEditorRevealType.AtTop);
+              await delay(300);
+            } else if (request.action === 'assertScrolled') {
+              await until(() => vscode.window.activeTextEditor.visibleRanges[0].start.line > 0);
+            } else if (request.action === 'resetFixture') {
+              const edit = new vscode.WorkspaceEdit();
+              edit.replace(document.uri, new vscode.Range(document.positionAt(0), document.positionAt(document.getText().length)), 'fixture');
+              await vscode.workspace.applyEdit(edit);
+              await focus();
+            }
             else if (request.action === 'restart') {
               await vscode.commands.executeCommand('extension.stopAirCodumServer');
               await vscode.commands.executeCommand('extension.startAirCodumServer');
