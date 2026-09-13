@@ -55,17 +55,27 @@ Check out this demo to understand how to use AirCodum: [AirCodum YouTube Demo](h
 4. Open **Files & AI → AI assistant → Set up AI**, then enter your API key.
 5. Click **Save key**. An API key is optional and is not needed for phone pairing.
 
+### Multiple computers and workspaces
+
+In the mobile app, open **Connections** to add and name each computer or VS Code workspace. Scan its QR code or enter its displayed host, port, and pairing key. Switch to a saved connection without typing those details again. Local Wi-Fi, Tailscale, and custom TLS connections can be saved together.
+
+Each extension window shows its workspace name above the pairing controls. Use **Server settings → Workspace name → Rename** to make it recognizable on your phone. Ports are automatic by default, including several windows on one computer; the QR code always contains the actual listening port. An exact port can be set under **Connection port → Change**. Changing the port requires updating or pairing that saved phone connection again.
+
+Workspace commands target the connected VS Code window. **VNC shows the computer’s shared desktop**, so windows on the same computer share screen capture, keyboard, and mouse control. For independent desktops, connect to separate computers or desktop sessions.
+
+Pairing credentials are isolated per workspace and additional listening port. The first upgraded workspace retains the previous pairing key on port 11040; pair other workspaces separately. Workspace identities and names survive reloads. Save an empty VS Code window as a workspace before relying on a durable saved connection.
+
 ### Pairing and transport
 
 This release requires a pairing-capable build of the original **AirCodum app (`com.codeair`)**. Agentum is a separate product. Install the updated mobile app before switching to this extension release. Old mobile builds can continue using the previous extension; they cannot authenticate to this secured listener.
 
-The listener uses port **11040** for commands, files and VNC. It defaults to localhost. Choose a detected private LAN address for same-network use, a Tailscale address for remote use, or leave localhost behind a TLS reverse proxy. Public and wildcard binds are rejected. Local Wi-Fi requires mobile 2.4.2 and uses unencrypted traffic; use a network you trust. Pairing remains required.
+Each VS Code window uses one port for commands, files and VNC. AirCodum starts at **11040**, automatically chooses another available port when necessary, and remembers it for that workspace. Always use the port shown in the extension. It defaults to localhost. Choose a detected private LAN address for same-network use, a Tailscale address for remote use, or leave localhost behind a TLS reverse proxy. Public and wildcard binds are rejected. Local Wi-Fi requires mobile 2.4.2 and uses unencrypted traffic; use a network you trust. Pairing remains required.
 
 ## Getting Started
 
 1. Open a trusted VS Code workspace and run **Start AirCodum Server** from the Command Palette.
 2. Run **AirCodum: Copy Pairing Token** and paste the token into the mobile app's connection settings. Keep it private: it authorizes desktop control.
-3. Choose **Local Wi-Fi / Ethernet** in the extension for same-network access. Enter the displayed private IP and port 11040 in the phone; **Local Wi-Fi** selects automatically. On iOS, allow Local Network access. Alternatively, choose **Tailscale** on both devices for remote access, or **Custom TLS server** for your configured TLS proxy.
+3. Choose **Local Wi-Fi / Ethernet** in the extension for same-network access. Enter the displayed private IP and port in the phone; **Local Wi-Fi** selects automatically. On iOS, allow Local Network access. Alternatively, choose **Tailscale** on both devices for remote access, or **Custom TLS server** for your configured TLS proxy.
 4. Connect. The app selects supported features automatically; no rollout flags are needed.
 5. Open VNC to stream the desktop. Compose text locally, then press **Send** to insert it. **Enter** is a separate remote key. On macOS, grant screen-recording and accessibility permissions to the VS Code host.
 
@@ -152,7 +162,7 @@ Tailscale enables secure remote access to your AirCodum server from anywhere:
    - They will automatically connect to your Tailscale network
 
 3. Set `aircodum.bindAddress` to your desktop's Tailscale IP and restart the AirCodum server.
-4. Enter that IP, port 11040 and the pairing token in the app, then select **Tailscale**. Plaintext hostnames are not accepted; use the actual Tailscale IP or TLS.
+4. Enter that IP, the displayed port and the pairing token in the app, then select **Tailscale**. Plaintext hostnames are not accepted; use the actual Tailscale IP or TLS.
 
 ## Command Reference
 
@@ -188,7 +198,7 @@ VS Code Commands (examples):
 
 ## Troubleshooting
 
-- **Can't start the server**: Make sure no other application is using the same port. Stop the other listener using port 11040 before starting AirCodum.
+- **Can't start the server**: Automatic port selection leaves other running windows alone. If you set a custom port, choose another available port or enter **0** to restore automatic selection in **Server settings → Connection port → Change**.
 - **Can't connect from other devices**: Check the pairing token, selected address and firewall. Local Wi-Fi requires both devices on the same network, mobile 2.4.2, iOS Local Network permission, and a router that allows devices to communicate. Guest Wi-Fi may isolate clients.
 - **AI features not working**: Verify that you've entered a valid OpenAI API key in the settings.
 - **File transfer issues**: Check if your WebSocket client is correctly configured to connect to the AirCodum server address.

@@ -3,9 +3,9 @@ const assert = require('node:assert/strict');
 const { once } = require('node:events');
 const Module = require('node:module');
 const { WebSocket } = require('ws');
-let captures = 0, uploads = 0, taps = [], typed = [], modifiers = [];
+let captures = 0, uploads = 0, taps = [], typed = [], modifiers = [], pointers = [], buttons = [], scrolls = [];
 const connectionEvents = [];
-const native = { getScreenSize: () => ({ width: 1440, height: 900 }), keyTap: (key, held = []) => { taps.push(key); modifiers = held; }, keyToggle: key => { modifiers = modifiers.filter(m => m !== key); }, moveMouse() {}, mouseToggle() {}, typeString(text) { if (!modifiers.length) typed.push(text); } };
+const native = { getScreenSize: () => ({ width: 1440, height: 900 }), keyTap: (key, held = []) => { taps.push(key); modifiers = held; }, keyToggle: key => { modifiers = modifiers.filter(m => m !== key); }, moveMouse(x, y) { pointers.push([x, y]); }, mouseToggle(state, button) { buttons.push([state, button]); }, scrollMouse(x, y) { scrolls.push([x, y]); }, typeString(text) { if (!modifiers.length) typed.push(text); } };
 const originalLoad = Module._load;
 Module._load = function(name, ...args) {
   if (name === 'vscode') return { workspace: { isTrusted: true }, window: { showInformationMessage() {}, createOutputChannel() { return { appendLine: line => connectionEvents.push(line), dispose() {} }; } } };
@@ -58,6 +58,8 @@ test('extension requires pairing, streams only on demand, rejects malformed text
     assert.deepEqual(capabilities.features.agents, []);
     assert.equal(captures, 0);
     assert.equal(capabilities.features.heartbeat, true);
+    assert.equal(capabilities.features.vncScroll, true);
+    assert.equal(capabilities.features.vncRightClick, true);
     const pong = message(client); client.send(JSON.stringify({type: 'ping'}));
     assert.equal((await pong).type, 'pong');
     const rejected = message(client); client.send('{broken');
@@ -81,11 +83,71 @@ test('extension requires pairing, streams only on demand, rejects malformed text
     const processed = message(client); client.send('{broken'); await processed;
     assert.deepEqual(typed, ['after shortcut']);
     assert.deepEqual(modifiers, []);
+    client.send(JSON.stringify({ type: 'vnc_stop' }));
+    const point = { x: 720, y: 450, screenWidth: 720, screenHeight: 450 };
+    client.send(JSON.stringify({ ...point, type: 'vnc_scroll', deltaX: -2, deltaY: 3 }));
+    client.send(JSON.stringify({ ...point, type: 'vnc_mouse_event', eventType: 'down', button: 'right' }));
+    const drained = message(client); client.send(JSON.stringify({ type: 'ping' })); await drained;
+    const { nativeScrollDelta } = require('../src/vnc-input.ts');
+    assert.deepEqual(scrolls, [[nativeScrollDelta(-2), nativeScrollDelta(3)]]);
+    assert.deepEqual(pointers.at(-1), [1439, 899], 'edge maps inside native screen');
+    assert.deepEqual(buttons.at(-1), ['down', 'right']);
+    const invalidScroll = message(client);
+    client.send(JSON.stringify({ ...point, type: 'vnc_scroll', deltaX: 0, deltaY: 1000000 }));
+    assert.equal((await invalidScroll).type, 'error');
+    assert.equal(scrolls.length, 1, 'invalid wheel events never reach native input');
   } finally {
     const closed = client ? once(client, 'close') : Promise.resolve();
     stopServer(); await closed;
   }
+  assert.deepEqual(buttons.at(-1), ['up', 'right'], 'disconnect releases held right button');
   // Rebind the exact port; old implementation leaked its HTTP listener.
   store.setState({ server: { port, isRunning: false, address: null } });
   await startServer('127.0.0.1', token); stopServer();
+});
+
+test('automatic ports preserve existing listeners and pair only with the selected instance key', async () => {
+  const occupied = require('net').createServer();
+  occupied.listen(0, '127.0.0.1'); await once(occupied, 'listening');
+  const occupiedPort = occupied.address().port;
+  let client;
+  try {
+    store.setState({ server: { port: occupiedPort, isRunning: false, address: null } });
+    await startServer('127.0.0.1', token, { port: occupiedPort, autoPort: true, pairingTokenForPort: port => require('../src/instance.ts').tokenForPort(token, port) });
+    const actual = store.getState().server.port;
+    assert.notEqual(actual, occupiedPort);
+    assert.equal(actual, store.getState().websocket.wss.address().port);
+    assert.equal(occupied.listening, true, 'starting another window does not stop the existing server');
+    const { getInstance, tokenForPort } = require('../src/instance.ts');
+    const wrong = new WebSocket(`ws://127.0.0.1:${actual}`, { headers: { Authorization: 'Bearer ' + token } });
+    await new Promise(resolve => wrong.once('error', resolve));
+    const selectedToken = tokenForPort(token, actual);
+    client = new WebSocket(`ws://127.0.0.1:${actual}`, { headers: { Authorization: 'Bearer ' + selectedToken } });
+    const hello = message(client);
+    await once(client, 'open');
+    const capabilities = await hello;
+    assert.equal(capabilities.instance.id, getInstance(actual).id);
+    assert.equal(capabilities.instance.sharedDesktop, true);
+    const closed = once(client, 'close'); stopServer(); await closed;
+    client = undefined;
+    await startServer('127.0.0.1', token, { port: actual, autoPort: true, pairingTokenForPort: port => require('../src/instance.ts').tokenForPort(token, port) });
+    assert.equal(store.getState().server.port, actual, 'restart retains the chosen endpoint');
+    assert.equal(tokenForPort(token, actual), selectedToken, 'restart retains its pairing key');
+  } finally {
+    const closed = client ? once(client, 'close') : Promise.resolve();
+    stopServer(); await closed;
+    await new Promise(resolve => occupied.close(resolve));
+  }
+});
+
+test('stopping during startup cannot leave a hidden listener behind', async () => {
+  store.setState({ server: { port: 0, isRunning: false, address: null } });
+  const starting = startServer('127.0.0.1', token);
+  stopServer();
+  const restarting = startServer('127.0.0.1', token);
+  await assert.rejects(starting, /cancelled/i);
+  await restarting;
+  assert.equal(store.getState().server.isRunning, true, 'an immediate restart waits for cancelled startup to finish');
+  assert.ok(store.getState().websocket.wss);
+  stopServer();
 });

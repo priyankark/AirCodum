@@ -96,7 +96,9 @@ export function getWebviewContent(): string {
   <div id="errorContainer" class="error" role="alert" hidden><span id="errorText"></span><button data-action="dismissError" aria-label="Dismiss error">×</button></div>
   <section id="connectionPanel" role="tabpanel" aria-labelledby="connectionTab">
     <div class="card">
-      <h2 id="connectionTitle">Connect your phone</h2>
+      <p class="muted" style="font-size:12px;margin-bottom:5px">THIS WORKSPACE</p>
+      <h2 id="instanceName" style="overflow-wrap:anywhere">AirCodum</h2>
+      <p id="connectionTitle" style="font-weight:600;margin-top:14px">Connect your phone</p>
       <p id="connectionHint" class="intro muted">Loading your connection settings…</p>
       <div class="address"><span id="addressKind" class="muted">Server address</span><code id="serverAddress">—</code></div>
       <div class="methods" role="tablist" aria-label="Pairing method">
@@ -119,6 +121,9 @@ export function getWebviewContent(): string {
     <details class="settings" id="serverSettings">
       <summary>Server settings &amp; troubleshooting</summary>
       <div class="settings-body">
+        <div class="setting-row"><div><h3>Workspace name</h3><p class="muted">Give this connection a name you’ll recognize on your phone.</p></div><button class="secondary" data-action="renameInstance">Rename</button></div>
+        <div class="setting-row"><div><h3>Connection port</h3><p class="muted" id="portMode">Each VS Code window gets its own available port.</p></div><button class="secondary" data-action="configurePort">Change</button></div>
+        <p class="caption muted" style="margin-bottom:14px">Add each workspace in your phone’s Connections. You can switch between computers and VS Code windows. Windows on the same computer share its desktop and mouse in VNC mode.</p>
         <div class="setting-row"><div><h3>Connection address</h3><p class="muted">Local Wi-Fi, Tailscale, or a TLS proxy.</p></div><button class="secondary" data-action="configureConnection">Change</button></div>
         <div class="setting-row"><div><h3>Server</h3><p class="muted" id="serverControlHint">Loading…</p></div><button id="serverControl" class="secondary" data-action="toggleServer" disabled>Start server</button></div>
         <div id="powerSettings" class="power" hidden>
@@ -146,13 +151,15 @@ export function getWebviewContent(): string {
 <script nonce="${nonce}">
   const vscode = acquireVsCodeApi();
   const el = id => document.getElementById(id);
-  let connection, connectionIdentity, qrRequested = false, apiKeySaved = false;
+  let connection, connectionIdentity, qrRequested = false, qrGeneration = 0, apiKeySaved = false;
   const post = command => vscode.postMessage({ command });
-  const hideQr = () => { qrRequested = false; el('pairingQrContainer').hidden = true; el('pairingQr').removeAttribute('src'); };
+  const hideQr = () => { qrGeneration++; qrRequested = false; el('pairingQrContainer').hidden = true; el('pairingQr').removeAttribute('src'); };
   const isLocal = host => host === 'localhost' || host === '::1' || host.startsWith('127.');
   function renderConnection() {
     if (!connection) return;
     const c = connection, local = isLocal(c.host), lan = c.localNetwork, count = c.running ? c.clients : 0;
+    el('instanceName').textContent = c.instance?.name || 'AirCodum';
+    el('portMode').textContent = c.automaticPort ? 'Automatic · ' + c.port + '. Other windows choose an available port.' : 'Custom · ' + c.port + '. Choose a different port for other windows.';
     el('serverState').textContent = count ? 'Connected' : c.running ? 'Server running' : 'Server stopped';
     el('serverState').dataset.state = count ? 'connected' : c.running ? 'ready' : 'stopped';
     el('connectionTitle').textContent = count ? "You're connected" : 'Connect your phone';
@@ -199,11 +206,13 @@ export function getWebviewContent(): string {
       if (!connection) return;
       if (!connection.running) return post('startServer');
       if (isLocal(connection.host)) return post('configureConnection');
-      if (qrRequested) hideQr(); else { qrRequested = true; post('showPairingQr'); }
+      if (qrRequested) hideQr(); else { qrRequested = true; vscode.postMessage({ command: 'showPairingQr', requestId: ++qrGeneration }); }
       renderConnection();
     },
     toggleServer: () => post(connection?.running ? 'stopServer' : 'startServer'),
     configureConnection: () => post('configureConnection'),
+    renameInstance: () => post('renameInstance'),
+    configurePort: () => post('configurePort'),
     copyPairingToken: () => post('copyPairingToken'),
     showConnectionLog: () => post('showConnectionLog'),
     dismissError: () => { el('errorContainer').hidden = true; },
@@ -225,12 +234,12 @@ export function getWebviewContent(): string {
     const m = event.data;
     switch (m.type) {
       case 'connection': {
-        const identity = JSON.stringify([m.host, m.port, m.running]);
+        const identity = JSON.stringify([m.host, m.port, m.running, m.instance?.id, m.instance?.name]);
         if (identity !== connectionIdentity) hideQr();
         connectionIdentity = identity; connection = m; renderConnection(); break;
       }
       case 'pairingQr':
-        if (!qrRequested || !connection?.running || el('qrPanel').hidden || el('connectionPanel').hidden) break;
+        if (m.requestId !== qrGeneration || !qrRequested || !connection?.running || el('qrPanel').hidden || el('connectionPanel').hidden) break;
         el('pairingQr').src = m.dataUrl; el('pairingQrContainer').hidden = false; el('errorContainer').hidden = true; renderConnection(); break;
       case 'power':
         el('keepAwake').checked = m.enabled; el('keepAwake').disabled = false;

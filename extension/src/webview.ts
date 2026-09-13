@@ -7,6 +7,7 @@ import { getWebviewContent } from "./webview-content";
 import { showConnectionLog } from "./connection-log";
 import { store } from "./state/store";
 import * as QRCode from "qrcode";
+import { getInstance } from "./instance";
 import { connectionDetails, pairingCode } from "./connection";
 
 export function createWebviewPanel(
@@ -29,11 +30,11 @@ export function createWebviewPanel(
   const sendConnection = () => {
     const server = store.getState().server;
     const configured = vscode.workspace.getConfiguration("aircodum").get<string>("bindAddress", "127.0.0.1");
-    panel.webview.postMessage({ type: "connection", clients: store.getState().websocket.connections.filter(socket => socket.readyState === 1).length, mac: process.platform === "darwin", ...connectionDetails(server, configured) });
+    panel.webview.postMessage({ type: "connection", instance: getInstance(), automaticPort: vscode.workspace.getConfiguration("aircodum").get<number>("port", 0) === 0, clients: store.getState().websocket.connections.filter(socket => socket.readyState === 1).length, mac: process.platform === "darwin", ...connectionDetails(server, configured) });
   };
   const unsubscribe = store.subscribe(sendConnection);
   const configSubscription = vscode.workspace.onDidChangeConfiguration(event => {
-    if (event.affectsConfiguration("aircodum.bindAddress")) sendConnection();
+    if (event.affectsConfiguration("aircodum.bindAddress") || event.affectsConfiguration("aircodum.port")) sendConnection();
   });
 
   panel.onDidDispose(
@@ -68,17 +69,24 @@ export function createWebviewPanel(
         case "showPairingQr": {
           try {
             const server = store.getState().server;
-            const payload = pairingCode(server, await getPairingToken());
+            const instance = getInstance(server.port);
+            const payload = pairingCode(server, await getPairingToken(), instance);
             const dataUrl = await QRCode.toDataURL(payload, { width: 640, margin: 4, errorCorrectionLevel: 'M' });
             const current = store.getState().server;
-            if (current.isRunning && current.address === server.address && current.port === server.port) {
-              panel.webview.postMessage({ type: "pairingQr", dataUrl });
+            if (current.isRunning && current.address === server.address && current.port === server.port && getInstance(current.port).name === instance.name) {
+              panel.webview.postMessage({ type: "pairingQr", dataUrl, requestId: message.requestId });
             }
           } catch (error) {
             panel.webview.postMessage({ type: "error", message: error instanceof Error ? error.message : "Unable to create pairing QR code." });
           }
           break;
         }
+        case "renameInstance":
+          await vscode.commands.executeCommand("extension.renameAirCodumInstance");
+          break;
+        case "configurePort":
+          await vscode.commands.executeCommand("extension.configureAirCodumPort");
+          break;
         case "configureConnection":
           await vscode.commands.executeCommand("extension.configureAirCodumConnection");
           break;
