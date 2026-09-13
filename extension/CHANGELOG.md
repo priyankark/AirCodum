@@ -1,3 +1,12 @@
+## 0.3.0
+
+- Added named workspace connections, automatic available ports, remembered endpoints, and configurable connection ports for multiple VS Code windows.
+- Added optional workspace identity/name metadata to QR pairing and the authenticated handshake for the mobile 2.5.0 saved-computer switcher. Existing QR/manual, Local Wi-Fi, Tailscale, and TLS proxy methods remain available.
+- Isolated pairing credentials per workspace and listening port, with concurrent initialization protection and migration of the first upgraded workspace’s existing key on port 11040.
+- Added negotiated native scrolling and right-click, input bounds and button-release handling. Mobile 2.5.0 also supplies local pinch zoom, pan, drag, and Fit controls.
+- Prevented stale QR replies from appearing after settings change and fixed immediate restart during server startup.
+- Clarified that VS Code API actions and uploads target the paired workspace, while VNC, native typing, and desktop shortcuts use the shared desktop and foreground application.
+
 ## 0.2.6
 
 - Restored same-network connections without Tailscale: choose Local Wi-Fi / Ethernet, then scan the QR code or enter details manually using mobile 2.4.2.

@@ -57,11 +57,11 @@ Check out this demo to understand how to use AirCodum: [AirCodum YouTube Demo](h
 
 ### Multiple computers and workspaces
 
-In the mobile app, open **Connections** to add and name each computer or VS Code workspace. Scan its QR code or enter its displayed host, port, and pairing key. Switch to a saved connection without typing those details again. Local Wi-Fi, Tailscale, and custom TLS connections can be saved together.
+In mobile 2.5.0, open **Your computers** (or tap **Switch** above the current session) to add and name each computer or VS Code workspace. Scan its QR code or enter its displayed host, port, and pairing key. Switch to a saved connection without typing those details again. Local Wi-Fi, Tailscale, and custom TLS connections can be saved together.
 
 Each extension window shows its workspace name above the pairing controls. Use **Server settings → Workspace name → Rename** to make it recognizable on your phone. Ports are automatic by default, including several windows on one computer; the QR code always contains the actual listening port. An exact port can be set under **Connection port → Change**. Changing the port requires updating or pairing that saved phone connection again.
 
-Workspace commands target the connected VS Code window. **VNC shows the computer’s shared desktop**, so windows on the same computer share screen capture, keyboard, and mouse control. For independent desktops, connect to separate computers or desktop sessions.
+VS Code API actions and file transfers target the connected workspace. **VNC, native typing, and desktop shortcuts act on the computer’s shared desktop and foreground application.** This includes the `type`, `keytap`, `search`, and `replace` text commands. Multiple VS Code windows do not create separate desktop sessions. For independent desktops, connect to separate computers or desktop sessions.
 
 Pairing credentials are isolated per workspace and additional listening port. The first upgraded workspace retains the previous pairing key on port 11040; pair other workspaces separately. Workspace identities and names survive reloads. Save an empty VS Code window as a workspace before relying on a durable saved connection.
 
@@ -86,15 +86,15 @@ Each VS Code window uses one port for commands, files and VNC. AirCodum starts a
 - **Image Analysis**: Send images from your smartphone to the VS Code instance and use AI for text extraction or analysis
 - **Smart Commands**: Control VS Code using natural language. 800+ commands supported.
 - **Screen Capture**: Take screenshots of your development environment and get them sent to your AirCodum app.
-- **VNC Mode**: Control your VS Code instance visually through your smartphone's screen, just like a remote desktop.
+- **VNC Mode**: View and control the computer’s shared desktop from your phone.
 
 ### VNC Mode
 
-VNC Mode allows you to control VS Code directly through your smartphone's screen, providing a remote desktop-like experience:
+VNC Mode shows the computer’s shared desktop. Native keyboard and mouse input goes to the foreground application:
 
 1. **Enabling VNC Mode**:
    - In your AirCodum mobile app, tap the "VNC Mode" button in the bottom navigation
-   - Your VS Code screen will start streaming to your phone in real-time
+   - Your computer’s desktop will start streaming to your phone
 
 2. **Interacting with VS Code**:
    - Tap anywhere on the screen to move the cursor
