@@ -98,7 +98,8 @@ test('extension requires pairing, streams only on demand, rejects malformed text
     assert.equal(scrolls.length, 1, 'invalid wheel events never reach native input');
   } finally {
     const closed = client ? once(client, 'close') : Promise.resolve();
-    stopServer(); await closed;
+    const serverClosed = once(wss, 'close');
+    stopServer(); await Promise.all([closed, serverClosed]);
   }
   assert.deepEqual(buttons.at(-1), ['up', 'right'], 'disconnect releases held right button');
   // Rebind the exact port; old implementation leaked its HTTP listener.
