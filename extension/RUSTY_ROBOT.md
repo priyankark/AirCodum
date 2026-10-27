@@ -49,3 +49,9 @@ Host CPU excludes OS subprocesses/WindowServer; first-frame and ping latency are
 not glass-to-glass latency. See the public benchmark data for measured limits.
 
 The integration follows the [Rusty Robot agent skill](https://github.com/priyankark/rusty-robot/tree/main/skills/rusty-robot).
+
+## Release source
+
+This release pins the shared Rusty Robot 0.1.1 workspace. The native runtime is
+unchanged from the published October 27 benchmarks; the patch aligns versions and
+fixes release checksum verification. Build the addon on each target host.

@@ -1,3 +1,13 @@
+## 0.4.0
+
+- Add opt-in Rust input, capture, resize, fingerprinting, and JPEG/PNG encoding through the shared Rusty Robot bridge.
+- Process screenshots and image attachments in Rust when selected; bound media jobs and discard stale frames.
+- Preserve Unicode and multiline native input on macOS.
+- Verified macOS streaming: 23.9 FPS versus 9.7 FPS with the original backend at 1440×810 JPEG quality 85. See the [benchmark report](https://priyankark.github.io/rusty-robot/).
+- Exclude local session data, benchmark artifacts, and host-built Rust addons from the VSIX.
+
+Rust is opt-in and uses an externally built addon for the host. See [Rust setup](RUSTY_ROBOT.md). The original backend remains the default.
+
 ## 0.3.0
 
 - Added named workspace connections, automatic available ports, remembered endpoints, and configurable connection ports for multiple VS Code windows.

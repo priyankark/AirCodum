@@ -1,5 +1,8 @@
 name: Rusty Robot integration
 on:
+  push:
+    branches: [main]
+    tags: ['v*']
   pull_request:
     paths: ['extension/**', '.github/workflows/rusty-robot.yml']
   workflow_dispatch:
