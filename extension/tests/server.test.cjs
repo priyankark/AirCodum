@@ -10,6 +10,7 @@ const originalLoad = Module._load;
 Module._load = function(name, ...args) {
   if (name === 'vscode') return { workspace: { isTrusted: true }, window: { showInformationMessage() {}, createOutputChannel() { return { appendLine: line => connectionEvents.push(line), dispose() {} }; } } };
   if (name === './commanding/robotjs-handlers') return { typedRobot: native };
+  if (name === './rusty-media') return { useRustMedia: () => true, loadRustMedia: () => ({ captureFrame: async () => { captures++; return { data: Buffer.from('frame'), width:1440, height:900, fingerprint:'owned-test-frame' }; } }) };
   if (name === './native-capture') return { capturePrimaryScreen: async () => { captures++; return Buffer.alloc(4096); }, nativeResizeJpeg: async () => null };
   if (name === './jimp') return { createImage: async () => ({ width: 1440, height: 900, getBuffer: async () => Buffer.from('frame') }) };
   if (name === './commanding/command-handler') return { handleCommand() {} };
@@ -22,7 +23,7 @@ require('../src/connection-log.ts').initializeConnectionLog({ subscriptions: [] 
 Module._load = originalLoad;
 const token = 'c'.repeat(64);
 const message = socket => once(socket, 'message').then(([data]) => JSON.parse(data.toString()));
-test('extension requires pairing, streams only on demand, rejects malformed text and releases listener', async () => {
+test('extension requires pairing, streams only on demand, rejects malformed text and releases listener', {timeout:10000}, async () => {
   store.setState({ server: { port: 0, isRunning: false, address: null } });
   await assert.rejects(startServer('0.0.0.0', token));
   const occupied = require('net').createServer(); occupied.listen(0, '127.0.0.1'); await once(occupied, 'listening');

@@ -1,4 +1,4 @@
-import { isAbsolute, resolve } from 'path';
+import { loadRustAddon } from './native-addon';
 
 export interface InputBackend {
   getScreenSize(): { width: number; height: number };
@@ -20,28 +20,29 @@ export function createRustBackend(addon: RustAddon): InputBackend {
     'mouseClick', 'scrollMouse', 'keyTap', 'keyToggle', 'typeString', 'setKeyboardDelay', 'getPermissions'] as const) {
     if (typeof addon?.[method] !== 'function') throw new Error(`Rusty Robot addon is missing ${method}`);
   }
-  if (addon.getPermissions().accessibility === false) throw new Error('Rusty Robot needs Accessibility permission for VS Code');
+  const ensureInputPermission = () => {
+    if (addon.getPermissions().accessibility === false) throw new Error('Grant Accessibility permission to VS Code in System Settings → Privacy & Security → Accessibility');
+  };
   const held = new Set<string>();
   return {
     getScreenSize: () => addon.getScreenSize(),
-    moveMouse(x, y) { const button = Array.from(held).pop(); if (button) addon.dragMouse(x, y, button); else addon.moveMouse(x, y); },
+    moveMouse(x, y) { ensureInputPermission(); const button = Array.from(held).pop(); if (button) addon.dragMouse(x, y, button); else addon.moveMouse(x, y); },
     mouseToggle(state, button = 'left') {
+      ensureInputPermission();
       addon.mouseToggle(state, button);
       if (state === 'down') held.add(button); else held.delete(button);
     },
-    mouseClick: button => addon.mouseClick(button),
-    scrollMouse: (x, y) => addon.scrollMouse(x, y),
-    keyTap: (key, modifiers) => addon.keyTap(key, modifiers),
-    keyToggle: (key, state, modifiers) => addon.keyToggle(key, state, modifiers),
-    typeString: text => addon.typeString(text),
+    mouseClick: (button) => { ensureInputPermission(); addon.mouseClick(button); },
+    scrollMouse: (x, y) => { ensureInputPermission(); addon.scrollMouse(x, y); },
+    keyTap: (key, modifiers) => { ensureInputPermission(); addon.keyTap(key, modifiers); },
+    keyToggle: (key, state, modifiers) => { ensureInputPermission(); addon.keyToggle(key, state, modifiers); },
+    typeString: (text) => { ensureInputPermission(); addon.typeString(text); },
     setKeyboardDelay: ms => addon.setKeyboardDelay(ms),
   };
 }
 export function loadInputBackend(robotjsPath: string): InputBackend {
-  const backend = process.env.AIRCODUM_INPUT_BACKEND || 'robotjs';
+  const backend = process.env.AIRCODUM_INPUT_BACKEND || 'rusty-robot';
   if (backend === 'robotjs') return require(robotjsPath) as InputBackend;
   if (backend !== 'rusty-robot') throw new Error(`Unknown AIRCODUM_INPUT_BACKEND: ${backend}`);
-  const configured = process.env.AIRCODUM_RUSTY_ROBOT_PATH;
-  if (configured && !isAbsolute(configured)) throw new Error('AIRCODUM_RUSTY_ROBOT_PATH must be an absolute trusted addon path');
-  return createRustBackend(require(configured || resolve(__dirname, '../native/rusty-robot/aircodum-rusty-robot.node')) as RustAddon);
+  return createRustBackend(loadRustAddon<RustAddon>());
 }

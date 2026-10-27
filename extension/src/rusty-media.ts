@@ -1,5 +1,5 @@
 // Shared Rust capture/resize/encode workers. Input and media can be selected independently.
-import { isAbsolute, resolve } from 'path';
+import { loadRustAddon } from './native-addon';
 export interface RustFrame {
   data?: Buffer | null; width: number; height: number;
   sourceWidth: number; sourceHeight: number; fingerprint: string; changed: boolean;
@@ -11,15 +11,13 @@ interface MediaAddon {
 }
 let cached: MediaAddon | undefined;
 export function useRustMedia(): boolean {
-  const backend = process.env.AIRCODUM_MEDIA_BACKEND || process.env.AIRCODUM_INPUT_BACKEND || 'robotjs';
+  const backend = process.env.AIRCODUM_MEDIA_BACKEND || process.env.AIRCODUM_INPUT_BACKEND || 'rusty-robot';
   if (backend !== 'robotjs' && backend !== 'rusty-robot') throw new Error(`Unknown AIRCODUM_MEDIA_BACKEND: ${backend}`);
   return backend === 'rusty-robot';
 }
 export function loadRustMedia(): MediaAddon {
   if (cached) return cached;
-  const configured = process.env.AIRCODUM_RUSTY_ROBOT_PATH;
-  if (configured && !isAbsolute(configured)) throw new Error('AIRCODUM_RUSTY_ROBOT_PATH must be an absolute trusted addon path');
-  const addon = require(configured || resolve(__dirname, '../native/rusty-robot/aircodum-rusty-robot.node')) as MediaAddon;
+  const addon = loadRustAddon<MediaAddon>();
   for (const method of ['captureFrame', 'resizeImage'] as const) {
     if (typeof addon?.[method] !== 'function') throw new Error(`Rusty Robot addon is missing ${method}; rebuild the shared addon`);
   }

@@ -21,7 +21,7 @@ AirCodum
 tests/**
 **/*.vsix
 
-# Experimental Rust backend is selected via an external absolute path
+# Source-build checkouts are excluded; verified Rust binaries ship in dist/rusty-robot
 native/**
 
 # Local verification and pairing data must never enter a release
@@ -29,3 +29,5 @@ benchmark-artifacts/**
 benchmarks/**
 scripts/**
 .github/**
+
+release-artifacts/**

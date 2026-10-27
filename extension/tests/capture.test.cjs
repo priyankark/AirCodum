@@ -1,3 +1,4 @@
+process.env.AIRCODUM_MEDIA_BACKEND = 'robotjs'; // Explicit legacy compatibility coverage.
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const Module = require('node:module');

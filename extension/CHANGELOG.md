@@ -1,3 +1,15 @@
+## 0.5.0
+
+- Do not show an API-key error after a successful file upload; AI setup is optional.
+- Reject fractional and non-numeric capture settings before scheduling native work.
+
+- Require VS Code 1.101+ for its Node 22 native runtime, including Windows ARM64.
+- Make Rust the default input, capture, screenshot, and image-processing backend.
+- Include native macOS, Windows, and Linux binaries in the VSIX; no source build is needed.
+- Keep the original backend available through explicit opt-in.
+- Check Accessibility permission at input time so setup remains usable and permissions can recover without a restart.
+- Validate packaged native binaries and authenticated socket behavior on supported architectures.
+
 ## 0.4.0
 
 - Patch the transitive brace-expansion dependency to address its CPU denial-of-service advisory.

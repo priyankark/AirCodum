@@ -1,24 +1,30 @@
 # AirCodum with Rusty Robot
 
-This opt-in integration composes [Rusty Robot](https://github.com/priyankark/rusty-robot)'s
-input library, Rust media library and shared Node-API bridge. RobotJS remains the
-default during the preview. Selecting Rust enables native input and native media;
-configured Rust failures do not silently switch implementations.
+Rust is the default for desktop input, screen capture, screenshots, and image
+processing. The release includes prebuilt native binaries. No Rust toolchain,
+Git checkout, or native compilation is needed for a released installation.
+
+Install AirCodum 0.5.0 from the VS Code Marketplace or its release VSIX.
+
+## Compatibility backend
+
+The original RobotJS/JavaScript media path is an explicit opt-in:
 
 ```sh
-npm ci
-npm run build:rusty-robot
-AIRCODUM_INPUT_BACKEND=rusty-robot code --extensionDevelopmentPath="$PWD"
+AIRCODUM_INPUT_BACKEND=robotjs code
 ```
 
-Build `npm run compile` before launching. The build script fetches the exact Git
-revision in `native/rusty-robot/source.json`, builds with the checked-in Cargo lock,
-and copies this host's addon. Rust 1.88+, a platform linker, Node and Git are needed.
-For development only, `RUSTY_ROBOT_SOURCE=/absolute/trusted/checkout` overrides the
-source; `AIRCODUM_RUSTY_ROBOT_PATH=/absolute/addon.node` overrides runtime loading.
-VS Code must inherit these variables in its extension host; a separate
-`--user-data-dir` avoids reusing a running instance with older environment settings.
-The preview addon is built per host, not bundled as a universal VSIX/npm binary.
+`AIRCODUM_MEDIA_BACKEND=robotjs` selects only the original media path. Rust
+load failures are reported; they never silently select another implementation.
+Quit all VS Code instances before changing launch environment variables, or use a separate `--user-data-dir`.
+
+## Platform support
+
+macOS 14+ on Intel/Apple Silicon; Windows 10/11 on x64/ARM64; Linux X11 on
+x64/ARM64 with glibc 2.35+ (Ubuntu 22.04+ and Debian 12+). Native Wayland and
+musl/Alpine are unsupported. macOS needs Accessibility and Screen Recording
+permissions for the actual host. Input permission errors are checked when input
+is requested, so granting access does not require restarting the app.
 
 ## What runs in Rust
 
@@ -50,8 +56,21 @@ not glass-to-glass latency. See the public benchmark data for measured limits.
 
 The integration follows the [Rusty Robot agent skill](https://github.com/priyankark/rusty-robot/tree/main/skills/rusty-robot).
 
-## Release source
+## Development source builds
 
-This release pins the shared Rusty Robot 0.1.1 workspace. The native runtime is
-unchanged from the published October 27 benchmarks; the patch aligns versions and
-fixes release checksum verification. Build the addon on each target host.
+The shared package is pinned to `@priyankark/rusty-robot@0.1.2`. CI builds
+and validates its binaries on every target and checks minimum/current Node hosts.
+For local Rust changes only, use `npm run build:rusty-robot` with Rust 1.88+ and
+Git, then set `AIRCODUM_RUSTY_ROBOT_PATH` to the absolute built addon path.
+`RUSTY_ROBOT_SOURCE` can select an absolute trusted source checkout.
+
+Requires VS Code 1.101 or newer, whose Electron 35 runtime provides Node 22
+across the supported architectures, including Windows ARM64.
+
+
+### Published dependency source
+
+The lockfile pins Rusty Robot 0.1.2 to its public GitHub release archive and npm
+integrity hash while the `@priyankark` registry mirror awaits publication.
+`npm ci` downloads the verified prebuilt package; the import remains
+`@priyankark/rusty-robot`, and no Rust compiler is required.

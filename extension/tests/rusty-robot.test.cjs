@@ -38,11 +38,14 @@ test('shortcuts and Unicode forward without conversion or swallowed errors', () 
   addon.typeString = () => { throw new Error('delivery failed'); };
   assert.throws(() => b.typeString('x'), /delivery failed/);
 });
-test('incomplete or denied native backend is rejected; unsupported permission API is allowed', () => {
+test('permissions gate input while allowing setup and recover without restarting', () => {
   assert.throws(() => createRustBackend({}), /missing/);
   const { addon } = fixture();
   addon.getPermissions = () => ({ accessibility: false });
-  assert.throws(() => createRustBackend(addon), /Accessibility/);
+  const backend = createRustBackend(addon);
+  assert.deepEqual(backend.getScreenSize(), {width:1600,height:1000});
+  assert.throws(() => backend.typeString('blocked'), /Accessibility/);
+  addon.getPermissions = () => ({accessibility:true}); assert.doesNotThrow(() => backend.typeString('allowed'));
   addon.getPermissions = () => ({}); assert.doesNotThrow(() => createRustBackend(addon));
 });
 test('explicit Rust load errors cannot fall back to RobotJS', () => {
