@@ -42,3 +42,16 @@ test('Rust workers preserve single-flight, idle suppression, refresh, quality in
   t.mock.timers.tick(1000); await settle(); assert.equal(calls.length, count);
   manager.shutdown?.();
 });
+
+
+test('invalid remote quality settings cannot poison the Rust capture loop', () => {
+  const manager = ScreenCaptureManager.getInstance();
+  const before = manager.getQualitySettings();
+  for (const [field, valid] of [['width', 1280], ['jpegQuality', 85], ['fps', 30]]) {
+    for (const value of [valid + 0.5, String(valid), null, NaN, Infinity, -1, 1e8]) {
+      manager.updateQualitySettings({ [field]: value });
+      assert.deepEqual(manager.getQualitySettings(), before, `${field} must reject ${String(value)}`);
+    }
+  }
+  manager.shutdown?.();
+});

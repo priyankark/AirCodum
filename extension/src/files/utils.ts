@@ -129,15 +129,8 @@ export async function handleFileUpload(fileBuffer: Buffer, ws: WebSocket) {
     });
 
     const apiKey = getApiKey();
-    if (!apiKey) {
-      panel?.webview.postMessage({
-        type: "error",
-        message: "OpenAI API key not found. Please enter your API key.",
-      });
-      return;
-    }
-
-    if (fileInfo.fileType === "image") {
+    // Pairing and file transfer work without the optional AI assistant.
+    if (apiKey && fileInfo.fileType === "image") {
       const transcription = await transcribeImage(fileInfo.content, apiKey);
       panel?.webview.postMessage({
         type: "transcription",
