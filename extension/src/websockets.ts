@@ -1,3 +1,4 @@
+import { loadRustMedia, useRustMedia } from './rusty-media';
 import * as vscode from "vscode";
 import WebSocket from "ws";
 import { typedRobot as robot } from "./commanding/robotjs-handlers";
@@ -113,6 +114,7 @@ export class ScreenCaptureManager {
     };
   }
 
+  private qualityGeneration = 0;
   private generation = 0;
   private inFlight = false;
   private lastRefresh = 0;
@@ -128,6 +130,26 @@ export class ScreenCaptureManager {
       this.inFlight = true;
       const started = performance.now();
       try {
+        const qualityGeneration = this.qualityGeneration;
+        if (useRustMedia()) {
+          const result = await loadRustMedia().captureFrame(this.quality.width, this.quality.jpegQuality,
+            this.lastFrameHash, Date.now() - this.lastRefresh >= 1000, 'jpeg');
+          if (!active() || qualityGeneration !== this.qualityGeneration) return;
+          if (result.data) {
+            const dimensions = { width: result.width, height: result.height };
+            this.cachedDimensions = dimensions;
+            this.lastFrameHash = result.fingerprint;
+            this.lastRefresh = Date.now();
+            this.lastFrameSize = result.data.length;
+            this.framesSent++;
+            this.updatePerformanceMetrics(performance.now() - started);
+            for (const subscriber of this.subscribers) {
+              try { subscriber(result.data, dimensions); } catch { /* Isolate closed clients. */ }
+            }
+            this.adjustQualityIfNeeded();
+          }
+          return;
+        }
         const raw = await capturePrimaryScreen();
         if (!active()) return;
         const hash = crypto.createHash('sha256').update(raw).digest('hex');
@@ -140,7 +162,7 @@ export class ScreenCaptureManager {
           }
           const dimensions = { ...this.cachedDimensions };
           const frame = await this.processFrame(raw, dimensions);
-          if (!active()) return;
+          if (!active() || qualityGeneration !== this.qualityGeneration) return;
           this.lastFrameHash = hash;
           this.lastRefresh = Date.now();
           this.lastFrameSize = frame.length;
@@ -222,6 +244,7 @@ export class ScreenCaptureManager {
   }
 
   private adjustQualityIfNeeded() {
+    if (process.env.AIRCODUM_CAPTURE_ADAPTIVE === '0') return;
     const now = Date.now();
     if (now - this.lastPerformanceCheck < this.PERFORMANCE_CHECK_INTERVAL) return;
 
@@ -292,6 +315,7 @@ export class ScreenCaptureManager {
     }
 
     if (changed) {
+      this.qualityGeneration++;
         this.lastFrameHash = null;
       this.resetPerformanceMetrics();
     }

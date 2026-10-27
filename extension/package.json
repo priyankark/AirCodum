@@ -74,7 +74,7 @@
           "minimum": 0,
           "maximum": 65535,
           "scope": "window",
-          "description": "0 automatically chooses and remembers an available port for this workspace, starting at 11040. Set 1024–65535 for an exact port; each active VS Code window needs a different port."
+          "description": "0 automatically chooses and remembers an available port for this workspace, starting at 11040. Set 1024\u201365535 for an exact port; each active VS Code window needs a different port."
         }
       }
     }
@@ -87,7 +87,8 @@
     "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
     "vscode:prepublish": "npm run package",
     "package": "npm run check-types && node esbuild.js --production",
-    "test:security": "node --require ./tests/register.cjs --test tests/*.test.cjs"
+    "test:security": "node --require ./tests/register.cjs --test tests/*.test.cjs",
+    "build:rusty-robot": "node scripts/build-rusty-robot.cjs"
   },
   "devDependencies": {
     "@types/jimp": "^0.2.1",

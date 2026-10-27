@@ -1,3 +1,5 @@
+import { readFile } from 'fs/promises';
+import { loadRustMedia, useRustMedia } from './rusty-media';
 import * as os from "os";
 import { resizeImage as jimpResizeImage } from "./jimp";
 
@@ -21,6 +23,11 @@ export async function resizeImage(
   width: number
 ): Promise<Buffer> {
   try {
+    if (useRustMedia()) {
+      const frame = await loadRustMedia().resizeImage(await readFile(filePath), width, null, 85, 'png');
+      if (!frame.data) throw new Error('Rust resize returned no image');
+      return frame.data;
+    }
     return await jimpResizeImage(filePath, width);
   } catch (error) {
     console.error("Error resizing image:", error);

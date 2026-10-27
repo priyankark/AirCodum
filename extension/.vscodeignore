@@ -20,3 +20,6 @@ AirCodum
 
 tests/**
 **/*.vsix
+
+# Experimental Rust backend is selected via an external absolute path
+native/**

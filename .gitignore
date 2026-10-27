@@ -6,3 +6,9 @@ node_modules
 AirCodum
 .DS_Store
 dist
+# Source-build Rust adapter
+extension/native/rusty-robot/target/
+extension/native/rusty-robot/*.node
+extension/benchmark-artifacts/
+
+extension/native/rusty-robot/source/
