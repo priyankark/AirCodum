@@ -23,7 +23,7 @@ for (let round = 1; round <= rounds; round++) {
       const result = spawnSync(code, ['--new-window', '--user-data-dir', join(directory, 'profile'), '--extensions-dir', join(directory, 'extensions'),
         '--disable-extensions', '--skip-welcome', '--skip-release-notes', '--disable-workspace-trust',
         `--extensionDevelopmentPath=${root}`, `--extensionTestsPath=${join(root, 'tests/benchmark-native.cjs')}`, join(directory, 'workspace')], {
-        cwd: root, env: { ...process.env, AIRCODUM_INPUT_BACKEND: backend, AIRCODUM_CAPTURE_ADAPTIVE: '0', AIRCODUM_BENCHMARK_VIDEO: '1', AIRCODUM_BENCHMARK_DIR: directory,
+        cwd: root, env: { ...process.env, AIRCODUM_INPUT_BACKEND: backend, AIRCODUM_MEDIA_BACKEND: backend, AIRCODUM_CAPTURE_ADAPTIVE: '0', AIRCODUM_BENCHMARK_VIDEO: '1', AIRCODUM_BENCHMARK_DIR: directory,
           AIRCODUM_RUSTY_ROBOT_PATH: join(root, 'native/rusty-robot/aircodum-rusty-robot.node') },
         encoding: 'utf8', timeout: 240000,
       });

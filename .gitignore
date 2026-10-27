@@ -12,3 +12,5 @@ extension/native/rusty-robot/*.node
 extension/benchmark-artifacts/
 
 extension/native/rusty-robot/source/
+
+/extension/benchmarks/
