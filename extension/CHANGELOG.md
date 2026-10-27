@@ -1,5 +1,7 @@
 ## 0.4.0
 
+- Patch the transitive brace-expansion dependency to address its CPU denial-of-service advisory.
+
 - Add opt-in Rust input, capture, resize, fingerprinting, and JPEG/PNG encoding through the shared Rusty Robot bridge.
 - Process screenshots and image attachments in Rust when selected; bound media jobs and discard stale frames.
 - Preserve Unicode and multiline native input on macOS.
