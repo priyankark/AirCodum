@@ -8,7 +8,7 @@ const addon = { captureFrame(...args) {
   if (fail) { fail = false; return Promise.reject(Error('native permission failure')); }
   return new Promise(resolve => { resolveCapture = resolve; });
 } };
-const native = { getScreenSize: () => ({ width: 1440, height: 810 }) };
+const native = { getScreenSize() { throw Error('No main display is available'); } };
 Module._load = function(name, ...args) {
   if (name === './rusty-media') return { useRustMedia: () => true, loadRustMedia: () => addon };
   if (name === './native-capture') return { capturePrimaryScreen() { throw Error('Must not use OS subprocess capture'); } };
@@ -21,6 +21,22 @@ const { ScreenCaptureManager } = require('../src/websockets.ts');
 Module._load = original;
 const settle = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
 const result = (data = Buffer.from('jpeg'), width = 1440) => ({ data, width, height: 810, fingerprint: 'hash', changed: Boolean(data) });
+test('Rust capture can subscribe without a display and recover when it returns', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'], now: 1000 });
+  const manager = ScreenCaptureManager.getInstance();
+  manager.updateQualitySettings({ width: 1280 });
+  const frames = [];
+  fail = true;
+  const stop = manager.subscribe((frame, dimensions) => frames.push(dimensions));
+  await settle();
+  assert.equal(frames.length, 0);
+  t.mock.timers.tick(40); await settle();
+  resolveCapture(result(Buffer.from('recovered'), 1280)); await settle();
+  assert.deepEqual(frames, [{ width: 1280, height: 810 }]);
+  stop(); manager.updateQualitySettings({ width: 1440 });
+  calls = [];
+});
+
 test('Rust workers preserve single-flight, idle suppression, refresh, quality invalidation, failure recovery and stop', async t => {
   t.mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'], now: 10000 });
   const manager = ScreenCaptureManager.getInstance(); const frames = [];

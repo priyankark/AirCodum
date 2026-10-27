@@ -5,7 +5,8 @@ const Module = require('node:module');
 const { WebSocket } = require('ws');
 let captures = 0, uploads = 0, taps = [], typed = [], modifiers = [], pointers = [], buttons = [], scrolls = [];
 const connectionEvents = [];
-const native = { getScreenSize: () => ({ width: 1440, height: 900 }), keyTap: (key, held = []) => { taps.push(key); modifiers = held; }, keyToggle: key => { modifiers = modifiers.filter(m => m !== key); }, moveMouse(x, y) { pointers.push([x, y]); }, mouseToggle(state, button) { buttons.push([state, button]); }, scrollMouse(x, y) { scrolls.push([x, y]); }, typeString(text) { if (!modifiers.length) typed.push(text); } };
+let displayAvailable = true;
+const native = { getScreenSize: () => { if (!displayAvailable) throw Error('No main display is available'); return { width: 1440, height: 900 }; }, keyTap: (key, held = []) => { taps.push(key); modifiers = held; }, keyToggle: key => { modifiers = modifiers.filter(m => m !== key); }, moveMouse(x, y) { pointers.push([x, y]); }, mouseToggle(state, button) { buttons.push([state, button]); }, scrollMouse(x, y) { scrolls.push([x, y]); }, typeString(text) { if (!modifiers.length) typed.push(text); } };
 const originalLoad = Module._load;
 Module._load = function(name, ...args) {
   if (name === 'vscode') return { workspace: { isTrusted: true }, window: { showInformationMessage() {}, createOutputChannel() { return { appendLine: line => connectionEvents.push(line), dispose() {} }; } } };
@@ -49,6 +50,7 @@ test('extension requires pairing, streams only on demand, rejects malformed text
     assert.ok(connectionEvents.some(line => line.includes('TLS requested on plain WebSocket port')));
     assert.ok(connectionEvents.every(line => !line.includes(token) && !line.includes('sensitive-invalid-key')));
     assert.equal(captures, 0);
+    displayAvailable = false;
     client = new WebSocket(`ws://127.0.0.1:${port}`, { headers: { Authorization: 'Bearer ' + token } });
     const hello = message(client);
     await once(client, 'open');
@@ -62,7 +64,12 @@ test('extension requires pairing, streams only on demand, rejects malformed text
     assert.equal(capabilities.features.vncScroll, true);
     assert.equal(capabilities.features.vncRightClick, true);
     const pong = message(client); client.send(JSON.stringify({type: 'ping'}));
-    assert.equal((await pong).type, 'pong');
+    assert.equal((await pong).type, 'pong', 'heartbeat works with no display');
+    const configured = message(client);
+    client.send(JSON.stringify({ type: 'vnc_quality_update', width: 1280 }));
+    client.send(JSON.stringify({ type: 'ping' }));
+    assert.equal((await configured).type, 'pong', 'quality configuration works with no display');
+    displayAvailable = true;
     const rejected = message(client); client.send('{broken');
     assert.equal((await rejected).type, 'error'); assert.equal(uploads, 0);
     const frame = message(client); client.send(JSON.stringify({ type: 'vnc_start' }));

@@ -1,5 +1,7 @@
 ## 0.5.0
 
+- Keep heartbeat, uploads and capture settings usable when a display is unavailable; retry captures when it returns.
+
 - Do not show an API-key error after a successful file upload; AI setup is optional.
 - Reject fractional and non-numeric capture settings before scheduling native work.
 
