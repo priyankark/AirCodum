@@ -136,7 +136,6 @@ export const BuiltInCommands = {
   "Insert Line Before": "editor.action.insertLineBefore",
   "Join Lines": "editor.action.joinLines",
   "Linked Editing": "editor.action.linkedEditing",
-  "Next Marker In Files": "editor.action.marker.nextInFiles",
   "Previous Marker": "editor.action.marker.prev",
   "Move Lines Down Action": "editor.action.moveLinesDownAction",
   "Move Lines Up Action": "editor.action.moveLinesUpAction",
@@ -1001,6 +1000,65 @@ export const BuiltInCommands = {
   "Show Problems Panel": "workbench.actions.view.problems",
   "Go to Next Problem": "editor.action.marker.next",
 } as const;
+
+// Preserve saved client commands without duplicating the visible command catalog.
+const legacyCommandAliases: Readonly<Record<string, string>> = {
+  "Move Cursor to Line End": "cursorLineEnd",
+  "Move Cursor to Line Start": "cursorLineStart",
+  "Accept Notebook Cell Chat Changes": "notebook.cell.chat.acceptChanges",
+  "Go To Next Reference": "goToNextReference",
+  "Go To Previous Reference": "goToPreviousReference",
+  "Copy Lines Down Action": "editor.action.copyLinesDownAction",
+  "Insert Cursor Above": "editor.action.insertCursorAbove",
+  "Insert Cursor Below": "editor.action.insertCursorBelow",
+  "Jump To Bracket": "editor.action.jumpToBracket",
+  "Next Marker": "editor.action.marker.next",
+  "Next Marker In Files": "editor.action.marker.nextInFiles",
+  "Previous Marker In Files": "editor.action.marker.prevInFiles",
+  "Select highlights": "editor.action.selectHighlights",
+  "Page next in quick input": "quickInput.pageNext",
+  "Open settings": "workbench.action.openSettings",
+  "View problems": "workbench.actions.view.problems",
+  "View extensions": "workbench.view.extensions",
+  "Quit edit in notebook cell": "notebook.cell.quitEdit",
+  "Hide notifications": "notifications.hideToasts",
+  "Fold All": "editor.foldAll",
+  "Unfold All": "editor.unfoldAll",
+  "Toggle Fold": "editor.toggleFold",
+  "Close Editor": "workbench.action.closeActiveEditor",
+  "Select All Occurrences of Find Match": "editor.action.selectAllMatches",
+  "Shrink Selection": "editor.action.smartSelect.shrink",
+  "Expand Selection": "editor.action.smartSelect.expand",
+  "Toggle Side Bar": "workbench.action.toggleSidebarVisibility",
+  "Show Keyboard Shortcuts": "workbench.action.openGlobalKeybindings",
+  "Toggle Activity Bar": "workbench.action.toggleActivityBarVisibility",
+  "Toggle Status Bar": "workbench.action.toggleStatusbarVisibility",
+  "Toggle Tabs": "workbench.action.toggleTabsVisibility",
+  "Focus on Editor Group Above": "workbench.action.focusAboveGroup",
+  "Focus on Editor Group Below": "workbench.action.focusBelowGroup",
+  "Focus on Editor Group Left": "workbench.action.focusLeftGroup",
+  "Focus on Editor Group Right": "workbench.action.focusRightGroup",
+  "Move Editor Left": "workbench.action.moveEditorLeftInGroup",
+  "Move Editor Right": "workbench.action.moveEditorRightInGroup",
+  "Open File in New Window": "workbench.action.files.openFileFolder",
+  "Select Current Line": "expandLineSelection",
+  "Toggle Terminal Panel": "workbench.action.terminal.toggleTerminal",
+  "Create New Terminal": "workbench.action.terminal.new",
+  "Go to Previous Problem": "editor.action.marker.prev"
+};
+
+const builtInCommandIds = new Map(Object.entries({ ...BuiltInCommands, ...legacyCommandAliases }));
+const foldedCommandIds = new Map<string, string | undefined>();
+for (const [name, id] of builtInCommandIds) {
+  const folded = name.toLowerCase();
+  // Some historical labels differ only in case but invoke different actions.
+  foldedCommandIds.set(folded,
+    foldedCommandIds.has(folded) && foldedCommandIds.get(folded) !== id ? undefined : id);
+}
+
+export function resolveBuiltInCommand(name: string): string | undefined {
+  return builtInCommandIds.get(name) ?? foldedCommandIds.get(name.toLowerCase());
+}
 
 /**
  * Custom commands that are not part of the built-in commands.

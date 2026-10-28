@@ -1,5 +1,8 @@
 ## 0.5.0
 
+- Deduplicate the command catalog while preserving saved command aliases and exact-case action distinctions.
+- Update flatted, minimatch and picomatch dependency lockfile entries.
+
 - Keep heartbeat, uploads and capture settings usable when a display is unavailable; retry captures when it returns.
 
 - Do not show an API-key error after a successful file upload; AI setup is optional.

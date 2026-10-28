@@ -17,7 +17,7 @@ import { getApiKey } from "./ai/utils";
 import { nativeScrollDelta } from './vnc-input';
 import { getInstance } from './instance';
 
-import { Commands } from "./commanding/commands";
+import { Commands, resolveBuiltInCommand } from "./commanding/commands";
 import jimp from "./jimp";
 import { ResizeStrategy } from "jimp";
 
@@ -488,6 +488,7 @@ class VSCodeVNCConnection {
 
   private isSupportedCommand(command: string): boolean {
     return (
+      resolveBuiltInCommand(command) !== undefined ||
       Object.keys(Commands)
         .map((e) => e.toLowerCase())
         .includes(command.toLowerCase()) ||

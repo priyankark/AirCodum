@@ -5,6 +5,7 @@ const Module = require('node:module');
 const { WebSocket } = require('ws');
 let captures = 0, uploads = 0, taps = [], typed = [], modifiers = [], pointers = [], buttons = [], scrolls = [];
 const connectionEvents = [];
+const handledCommands = [];
 let displayAvailable = true;
 const native = { getScreenSize: () => { if (!displayAvailable) throw Error('No main display is available'); return { width: 1440, height: 900 }; }, keyTap: (key, held = []) => { taps.push(key); modifiers = held; }, keyToggle: key => { modifiers = modifiers.filter(m => m !== key); }, moveMouse(x, y) { pointers.push([x, y]); }, mouseToggle(state, button) { buttons.push([state, button]); }, scrollMouse(x, y) { scrolls.push([x, y]); }, typeString(text) { if (!modifiers.length) typed.push(text); } };
 const originalLoad = Module._load;
@@ -14,7 +15,7 @@ Module._load = function(name, ...args) {
   if (name === './rusty-media') return { useRustMedia: () => true, loadRustMedia: () => ({ captureFrame: async () => { captures++; return { data: Buffer.from('frame'), width:1440, height:900, fingerprint:'owned-test-frame' }; } }) };
   if (name === './native-capture') return { capturePrimaryScreen: async () => { captures++; return Buffer.alloc(4096); }, nativeResizeJpeg: async () => null };
   if (name === './jimp') return { createImage: async () => ({ width: 1440, height: 900, getBuffer: async () => Buffer.from('frame') }) };
-  if (name === './commanding/command-handler') return { handleCommand() {} };
+  if (name === './commanding/command-handler') return { handleCommand(command) { handledCommands.push(command); } };
   if (name === './files/utils') return { handleFileUpload() { uploads++; } };
   return originalLoad.call(this, name, ...args);
 };
@@ -70,6 +71,11 @@ test('extension requires pairing, streams only on demand, rejects malformed text
     client.send(JSON.stringify({ type: 'ping' }));
     assert.equal((await configured).type, 'pong', 'quality configuration works with no display');
     displayAvailable = true;
+    const aliasHandled = message(client);
+    client.send('Move Cursor to Line End');
+    client.send(JSON.stringify({ type: 'ping' }));
+    assert.equal((await aliasHandled).type, 'pong');
+    assert.deepEqual(handledCommands, ['Move Cursor to Line End']);
     const rejected = message(client); client.send('{broken');
     assert.equal((await rejected).type, 'error'); assert.equal(uploads, 0);
     const frame = message(client); client.send(JSON.stringify({ type: 'vnc_start' }));
