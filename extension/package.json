@@ -2,11 +2,11 @@
   "name": "aircodum-app",
   "displayName": "AirCodum: Smartphone based Remote Control for VS Code",
   "description": "Smartphone based Remote Control for VS Code. Control IDE actions, send files and images, get AI assistance and more, right from your smartphone.",
-  "version": "0.3.0",
+  "version": "0.5.0",
   "publisher": "priyankark",
   "repository": "https://github.com/priyankark/AirCodum",
   "engines": {
-    "vscode": "^1.74.0"
+    "vscode": "^1.101.0"
   },
   "categories": [
     "AI",
@@ -74,7 +74,7 @@
           "minimum": 0,
           "maximum": 65535,
           "scope": "window",
-          "description": "0 automatically chooses and remembers an available port for this workspace, starting at 11040. Set 1024–65535 for an exact port; each active VS Code window needs a different port."
+          "description": "0 automatically chooses and remembers an available port for this workspace, starting at 11040. Set 1024\u201365535 for an exact port; each active VS Code window needs a different port."
         }
       }
     }
@@ -87,7 +87,8 @@
     "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
     "vscode:prepublish": "npm run package",
     "package": "npm run check-types && node esbuild.js --production",
-    "test:security": "node --require ./tests/register.cjs --test tests/*.test.cjs"
+    "test:security": "node --require ./tests/register.cjs --test tests/*.test.cjs",
+    "build:rusty-robot": "node scripts/build-rusty-robot.cjs"
   },
   "devDependencies": {
     "@types/jimp": "^0.2.1",
@@ -102,10 +103,10 @@
     "eslint": "^8.26.0",
     "jsqr": "^1.4.0",
     "npm-run-all": "^4.1.5",
-    "typescript": "^5.5.2"
+    "typescript": "^5.5.2",
+    "@vscode/test-electron": "2.5.2"
   },
   "dependencies": {
-    "@hurdlegroup/robotjs": "^0.12.2",
     "@types/node-fetch": "^2.6.11",
     "@types/screenshot-desktop": "^1.12.3",
     "dotenv": "^16.4.5",
@@ -118,11 +119,16 @@
     "proper-lockfile": "^4.1.2",
     "qrcode": "^1.5.4",
     "screenshot-desktop": "^1.15.2",
-    "ws": "^8.18.0"
+    "ws": "^8.18.0",
+    "@priyankark/rusty-robot": "https://github.com/priyankark/rusty-robot/releases/download/v0.1.2/priyankark-rusty-robot-0.1.2.tgz"
   },
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": false
     }
+  },
+  "author": "priyankark",
+  "optionalDependencies": {
+    "@hurdlegroup/robotjs": "^0.12.2"
   }
 }

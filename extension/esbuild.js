@@ -32,6 +32,10 @@ async function copyNativeAddons() {
     }
   }
 
+  const rustPackage = path.dirname(require.resolve('@priyankark/rusty-robot/package.json'));
+  await fs.remove(path.join(__dirname, 'dist/rusty-robot'));
+  await fs.copy(rustPackage, path.join(__dirname, 'dist/rusty-robot'));
+
   // Copy screenshot-desktop batch file for windows from node_modules
   const screenshotDesktopSource = path.join(
     __dirname,
@@ -90,7 +94,12 @@ async function main() {
     outfile: "dist/extension.js",
     external: ["vscode", "@hurdlegroup/robotjs"],
     logLevel: "info",
-    plugins: [esbuildProblemMatcherPlugin, nativeAddonPlugin],
+    plugins: [esbuildProblemMatcherPlugin, nativeAddonPlugin, {
+      name: 'bundled-rust-package',
+      setup(build) {
+        build.onResolve({ filter: /^@priyankark\/rusty-robot$/ }, () => ({ path: './rusty-robot', external: true }));
+      },
+    }],
   });
   if (watch) {
     await ctx.watch();

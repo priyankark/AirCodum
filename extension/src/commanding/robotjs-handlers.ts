@@ -1,6 +1,7 @@
 import * as path from "path";
 import * as vscode from "vscode";
 import os from "os";
+import { loadInputBackend } from "../rusty-robot";
 
 // Dynamically load the correct native module based on the platform
 let robotjsPath: string;
@@ -31,7 +32,7 @@ if (process.platform === "darwin") {
 }
 
 // Load the native module
-const robot = require(robotjsPath);
+const robot = loadInputBackend(robotjsPath);
 
 // Type definition for the robotjs module
 interface RobotJS {
