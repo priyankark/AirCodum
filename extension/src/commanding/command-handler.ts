@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import WebSocket from "ws";
-import { BuiltInCommands, Commands } from "./commands";
+import { resolveBuiltInCommand } from "./commands";
 import { RobotJSCommandHandlers } from "./robotjs-handlers";
 import { chatWithOpenAI } from "../ai/api";
 import { getApiKey } from "../ai/utils";
@@ -15,14 +15,13 @@ import { store } from "../state/store";
  * @returns
  */
 export async function handleCommand(
-  command: keyof typeof Commands,
+  command: string,
   ws: WebSocket
 ) {
   // Execute BuiltInCommands via VS Code API
-  if (Object.keys(BuiltInCommands).includes(command)) {
-    vscode.commands.executeCommand(
-      BuiltInCommands[command as keyof typeof BuiltInCommands]
-    );
+  const builtIn = resolveBuiltInCommand(command);
+  if (builtIn) {
+    await vscode.commands.executeCommand(builtIn);
     return;
   }
 

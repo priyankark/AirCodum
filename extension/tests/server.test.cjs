@@ -5,14 +5,17 @@ const Module = require('node:module');
 const { WebSocket } = require('ws');
 let captures = 0, uploads = 0, taps = [], typed = [], modifiers = [], pointers = [], buttons = [], scrolls = [];
 const connectionEvents = [];
-const native = { getScreenSize: () => ({ width: 1440, height: 900 }), keyTap: (key, held = []) => { taps.push(key); modifiers = held; }, keyToggle: key => { modifiers = modifiers.filter(m => m !== key); }, moveMouse(x, y) { pointers.push([x, y]); }, mouseToggle(state, button) { buttons.push([state, button]); }, scrollMouse(x, y) { scrolls.push([x, y]); }, typeString(text) { if (!modifiers.length) typed.push(text); } };
+const handledCommands = [];
+let displayAvailable = true;
+const native = { getScreenSize: () => { if (!displayAvailable) throw Error('No main display is available'); return { width: 1440, height: 900 }; }, keyTap: (key, held = []) => { taps.push(key); modifiers = held; }, keyToggle: key => { modifiers = modifiers.filter(m => m !== key); }, moveMouse(x, y) { pointers.push([x, y]); }, mouseToggle(state, button) { buttons.push([state, button]); }, scrollMouse(x, y) { scrolls.push([x, y]); }, typeString(text) { if (!modifiers.length) typed.push(text); } };
 const originalLoad = Module._load;
 Module._load = function(name, ...args) {
   if (name === 'vscode') return { workspace: { isTrusted: true }, window: { showInformationMessage() {}, createOutputChannel() { return { appendLine: line => connectionEvents.push(line), dispose() {} }; } } };
   if (name === './commanding/robotjs-handlers') return { typedRobot: native };
+  if (name === './rusty-media') return { useRustMedia: () => true, loadRustMedia: () => ({ captureFrame: async () => { captures++; return { data: Buffer.from('frame'), width:1440, height:900, fingerprint:'owned-test-frame' }; } }) };
   if (name === './native-capture') return { capturePrimaryScreen: async () => { captures++; return Buffer.alloc(4096); }, nativeResizeJpeg: async () => null };
   if (name === './jimp') return { createImage: async () => ({ width: 1440, height: 900, getBuffer: async () => Buffer.from('frame') }) };
-  if (name === './commanding/command-handler') return { handleCommand() {} };
+  if (name === './commanding/command-handler') return { handleCommand(command) { handledCommands.push(command); } };
   if (name === './files/utils') return { handleFileUpload() { uploads++; } };
   return originalLoad.call(this, name, ...args);
 };
@@ -22,7 +25,7 @@ require('../src/connection-log.ts').initializeConnectionLog({ subscriptions: [] 
 Module._load = originalLoad;
 const token = 'c'.repeat(64);
 const message = socket => once(socket, 'message').then(([data]) => JSON.parse(data.toString()));
-test('extension requires pairing, streams only on demand, rejects malformed text and releases listener', async () => {
+test('extension requires pairing, streams only on demand, rejects malformed text and releases listener', {timeout:10000}, async () => {
   store.setState({ server: { port: 0, isRunning: false, address: null } });
   await assert.rejects(startServer('0.0.0.0', token));
   const occupied = require('net').createServer(); occupied.listen(0, '127.0.0.1'); await once(occupied, 'listening');
@@ -48,6 +51,7 @@ test('extension requires pairing, streams only on demand, rejects malformed text
     assert.ok(connectionEvents.some(line => line.includes('TLS requested on plain WebSocket port')));
     assert.ok(connectionEvents.every(line => !line.includes(token) && !line.includes('sensitive-invalid-key')));
     assert.equal(captures, 0);
+    displayAvailable = false;
     client = new WebSocket(`ws://127.0.0.1:${port}`, { headers: { Authorization: 'Bearer ' + token } });
     const hello = message(client);
     await once(client, 'open');
@@ -61,7 +65,17 @@ test('extension requires pairing, streams only on demand, rejects malformed text
     assert.equal(capabilities.features.vncScroll, true);
     assert.equal(capabilities.features.vncRightClick, true);
     const pong = message(client); client.send(JSON.stringify({type: 'ping'}));
-    assert.equal((await pong).type, 'pong');
+    assert.equal((await pong).type, 'pong', 'heartbeat works with no display');
+    const configured = message(client);
+    client.send(JSON.stringify({ type: 'vnc_quality_update', width: 1280 }));
+    client.send(JSON.stringify({ type: 'ping' }));
+    assert.equal((await configured).type, 'pong', 'quality configuration works with no display');
+    displayAvailable = true;
+    const aliasHandled = message(client);
+    client.send('Move Cursor to Line End');
+    client.send(JSON.stringify({ type: 'ping' }));
+    assert.equal((await aliasHandled).type, 'pong');
+    assert.deepEqual(handledCommands, ['Move Cursor to Line End']);
     const rejected = message(client); client.send('{broken');
     assert.equal((await rejected).type, 'error'); assert.equal(uploads, 0);
     const frame = message(client); client.send(JSON.stringify({ type: 'vnc_start' }));
@@ -98,7 +112,8 @@ test('extension requires pairing, streams only on demand, rejects malformed text
     assert.equal(scrolls.length, 1, 'invalid wheel events never reach native input');
   } finally {
     const closed = client ? once(client, 'close') : Promise.resolve();
-    stopServer(); await closed;
+    const serverClosed = once(wss, 'close');
+    stopServer(); await Promise.all([closed, serverClosed]);
   }
   assert.deepEqual(buttons.at(-1), ['up', 'right'], 'disconnect releases held right button');
   // Rebind the exact port; old implementation leaked its HTTP listener.

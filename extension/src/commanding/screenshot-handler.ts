@@ -1,3 +1,4 @@
+import { loadRustMedia, useRustMedia } from '../rusty-media';
 import { WebSocket } from "ws";
 import screenshot from "screenshot-desktop";
 import { saveFile } from "../files/utils";
@@ -9,6 +10,12 @@ import { resizeImage } from "../utils";
  */
 export async function takeAndSendScreenshot(ws: WebSocket) {
   try {
+    if (useRustMedia()) {
+      const frame = await loadRustMedia().captureFrame(800, 85, null, true, 'png');
+      if (!frame.data) throw new Error('Rust capture returned no screenshot');
+      ws.send(`data:image/png;base64,${frame.data.toString('base64')}`);
+      return;
+    }
     const scnsht = await screenshot({ format: "png" });
     let screenshotBuffer: Buffer;
     if (Array.isArray(scnsht)) {

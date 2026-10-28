@@ -11,7 +11,8 @@ Module._load = function(name, ...args) {
   if (name === 'child_process') return { execFile(file, args, options, callback) {
     calls.push([file, args]);
     const target = args.at(-1); paths.push(target);
-    assert.equal(fs.statSync(path.dirname(target)).mode & 0o777, 0o700);
+    // Darwin calls are simulated on all hosts; Windows exposes ACL-backed modes.
+    if (platform.value !== 'win32') assert.equal(fs.statSync(path.dirname(target)).mode & 0o777, 0o700);
     assert.equal(options.timeout, 5000);
     if (fail) return callback(new Error('native failure'));
     fs.writeFileSync(target, Buffer.from('jpeg'));

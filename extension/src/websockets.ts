@@ -1,3 +1,4 @@
+import { loadRustMedia, useRustMedia } from './rusty-media';
 import * as vscode from "vscode";
 import WebSocket from "ws";
 import { typedRobot as robot } from "./commanding/robotjs-handlers";
@@ -16,7 +17,7 @@ import { getApiKey } from "./ai/utils";
 import { nativeScrollDelta } from './vnc-input';
 import { getInstance } from './instance';
 
-import { Commands } from "./commanding/commands";
+import { Commands, resolveBuiltInCommand } from "./commanding/commands";
 import jimp from "./jimp";
 import { ResizeStrategy } from "jimp";
 
@@ -63,8 +64,9 @@ export class ScreenCaptureManager {
   private readonly PERFORMANCE_CHECK_INTERVAL = 2000; // ms
 
   private subscribers: Array<(frame: Buffer, dimensions: { width: number; height: number }) => void> = [];
-  private screenSize = robot.getScreenSize();
-  private cachedDimensions = this.getScaledDimensions();
+  // Display lookup belongs inside the recoverable capture loop, not construction.
+  private screenSize: { width: number; height: number } | null = null;
+  private cachedDimensions: { width: number; height: number } | null = null;
 
   private constructor() {
     this.setupPerformanceMonitoring();
@@ -113,6 +115,7 @@ export class ScreenCaptureManager {
     };
   }
 
+  private qualityGeneration = 0;
   private generation = 0;
   private inFlight = false;
   private lastRefresh = 0;
@@ -128,19 +131,39 @@ export class ScreenCaptureManager {
       this.inFlight = true;
       const started = performance.now();
       try {
+        const qualityGeneration = this.qualityGeneration;
+        if (useRustMedia()) {
+          const result = await loadRustMedia().captureFrame(this.quality.width, this.quality.jpegQuality,
+            this.lastFrameHash, Date.now() - this.lastRefresh >= 1000, 'jpeg');
+          if (!active() || qualityGeneration !== this.qualityGeneration) return;
+          if (result.data) {
+            const dimensions = { width: result.width, height: result.height };
+            this.cachedDimensions = dimensions;
+            this.lastFrameHash = result.fingerprint;
+            this.lastRefresh = Date.now();
+            this.lastFrameSize = result.data.length;
+            this.framesSent++;
+            this.updatePerformanceMetrics(performance.now() - started);
+            for (const subscriber of this.subscribers) {
+              try { subscriber(result.data, dimensions); } catch { /* Isolate closed clients. */ }
+            }
+            this.adjustQualityIfNeeded();
+          }
+          return;
+        }
         const raw = await capturePrimaryScreen();
         if (!active()) return;
         const hash = crypto.createHash('sha256').update(raw).digest('hex');
         // Periodic refresh allows a slow/new subscriber to recover on an idle desktop.
         if (hash !== this.lastFrameHash || Date.now() - this.lastRefresh >= 1000) {
           const screenSize = robot.getScreenSize();
-          if (screenSize.width !== this.screenSize.width || screenSize.height !== this.screenSize.height) {
+          if (screenSize.width !== this.screenSize?.width || screenSize.height !== this.screenSize?.height) {
             this.screenSize = screenSize;
             this.cachedDimensions = this.getScaledDimensions();
           }
-          const dimensions = { ...this.cachedDimensions };
+          const dimensions = this.getScaledDimensions()!;
           const frame = await this.processFrame(raw, dimensions);
-          if (!active()) return;
+          if (!active() || qualityGeneration !== this.qualityGeneration) return;
           this.lastFrameHash = hash;
           this.lastRefresh = Date.now();
           this.lastFrameSize = frame.length;
@@ -222,6 +245,7 @@ export class ScreenCaptureManager {
   }
 
   private adjustQualityIfNeeded() {
+    if (process.env.AIRCODUM_CAPTURE_ADAPTIVE === '0') return;
     const now = Date.now();
     if (now - this.lastPerformanceCheck < this.PERFORMANCE_CHECK_INTERVAL) return;
 
@@ -257,6 +281,7 @@ export class ScreenCaptureManager {
   }
 
   private getScaledDimensions() {
+    if (!this.screenSize) return null;
     const width = Math.min(this.quality.width, this.screenSize.width);
     const { width: realWidth, height: realHeight } = this.screenSize;
     const height = Math.floor(width * (realHeight / realWidth));
@@ -266,7 +291,7 @@ export class ScreenCaptureManager {
   public updateQualitySettings(quality: Partial<VNCQualitySettings>) {
     let changed = false;
 
-    if (Number.isFinite(quality.width) && quality.width !== undefined &&
+    if (Number.isInteger(quality.width) && quality.width !== undefined &&
         quality.width >= this.MIN_WIDTH &&
         quality.width <= this.MAX_WIDTH &&
         quality.width !== this.quality.width) {
@@ -275,7 +300,7 @@ export class ScreenCaptureManager {
       changed = true;
     }
 
-    if (Number.isFinite(quality.jpegQuality) && quality.jpegQuality !== undefined &&
+    if (Number.isInteger(quality.jpegQuality) && quality.jpegQuality !== undefined &&
         quality.jpegQuality >= this.MIN_QUALITY &&
         quality.jpegQuality <= this.MAX_QUALITY &&
         quality.jpegQuality !== this.quality.jpegQuality) {
@@ -283,7 +308,7 @@ export class ScreenCaptureManager {
       changed = true;
     }
 
-    if (Number.isFinite(quality.fps) && quality.fps !== undefined &&
+    if (Number.isInteger(quality.fps) && quality.fps !== undefined &&
         quality.fps >= 1 &&
         quality.fps <= 60 &&
         quality.fps !== this.quality.fps) {
@@ -292,6 +317,7 @@ export class ScreenCaptureManager {
     }
 
     if (changed) {
+      this.qualityGeneration++;
         this.lastFrameHash = null;
       this.resetPerformanceMetrics();
     }
@@ -328,7 +354,6 @@ export class ScreenCaptureManager {
  */
 class VSCodeVNCConnection {
   private unsubscribe: (() => void) | null = null;
-  private screenSize = robot.getScreenSize();
   private heldButtons = new Set<string>();
 
   constructor(private ws: WebSocket) {
@@ -413,18 +438,11 @@ class VSCodeVNCConnection {
     });
   }
 
-  private getScaledDimensions() {
-    const { width } = ScreenCaptureManager.getInstance()["quality"];
-    const { width: realWidth, height: realHeight } = this.screenSize;
-    const height = Math.floor(width * (realHeight / realWidth));
-    return { width, height };
-  }
-
   private movePointer(data: any) {
     // Refresh after display changes and clamp the far edge to a real pixel.
-    this.screenSize = robot.getScreenSize();
-    const x = Math.min(this.screenSize.width - 1, Math.floor(data.x / data.screenWidth * this.screenSize.width));
-    const y = Math.min(this.screenSize.height - 1, Math.floor(data.y / data.screenHeight * this.screenSize.height));
+    const screenSize = robot.getScreenSize();
+    const x = Math.min(screenSize.width - 1, Math.floor(data.x / data.screenWidth * screenSize.width));
+    const y = Math.min(screenSize.height - 1, Math.floor(data.y / data.screenHeight * screenSize.height));
     robot.moveMouse(Math.max(0, x), Math.max(0, y));
   }
 
@@ -470,6 +488,7 @@ class VSCodeVNCConnection {
 
   private isSupportedCommand(command: string): boolean {
     return (
+      resolveBuiltInCommand(command) !== undefined ||
       Object.keys(Commands)
         .map((e) => e.toLowerCase())
         .includes(command.toLowerCase()) ||

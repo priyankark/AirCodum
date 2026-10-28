@@ -20,3 +20,14 @@ AirCodum
 
 tests/**
 **/*.vsix
+
+# Source-build checkouts are excluded; verified Rust binaries ship in dist/rusty-robot
+native/**
+
+# Local verification and pairing data must never enter a release
+benchmark-artifacts/**
+benchmarks/**
+scripts/**
+.github/**
+
+release-artifacts/**
